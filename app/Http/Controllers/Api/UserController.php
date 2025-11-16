@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use App\Rules\SecureImage;
 
 class UserController extends Controller
 {
@@ -118,10 +119,10 @@ class UserController extends Controller
     public function updateImage(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'image' => 'required|image|max:1024', // Max 1MB
+            'image' => ['required', 'file', new SecureImage(['image/jpeg', 'image/png', 'image/webp']), 'max:1024'], // Max 1MB
         ], [
             'image.required' => 'لطفا یک تصویر انتخاب کنید',
-            'image.image' => 'فایل انتخابی باید یک تصویر باشد',
+            'image.file' => 'فایل انتخابی باید یک فایل معتبر باشد',
             'image.max' => 'حجم تصویر نباید بیشتر از 2 مگابایت باشد',
         ]);
 
