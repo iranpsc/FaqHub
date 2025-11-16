@@ -118,11 +118,10 @@ class UserController extends Controller
     public function updateImage(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048', // Max 2MB
+            'image' => 'required|image|max:1024', // Max 1MB
         ], [
             'image.required' => 'لطفا یک تصویر انتخاب کنید',
             'image.image' => 'فایل انتخابی باید یک تصویر باشد',
-            'image.mimes' => 'فرمت تصویر باید از نوع: jpeg, png, jpg, gif باشد',
             'image.max' => 'حجم تصویر نباید بیشتر از 2 مگابایت باشد',
         ]);
 
