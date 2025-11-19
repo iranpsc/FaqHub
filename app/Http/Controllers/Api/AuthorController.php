@@ -39,7 +39,8 @@ class AuthorController extends Controller
             if ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
+                      ->orWhere('email', 'like', "%{$search}%")
+                      ->orWhere('username', 'like', "%{$search}%");
                 });
             }
 
@@ -75,6 +76,7 @@ class AuthorController extends Controller
             $formattedUsers = $users->getCollection()->map(function ($user) {
                 return [
                     'id' => $user->id,
+                    'username' => $user->username,
                     'name' => $user->name,
                     'email' => $user->email,
                     'score' => $user->score ?? 0,
@@ -126,26 +128,27 @@ class AuthorController extends Controller
     /**
      * Get single author details with their activity
      *
-     * @param User $user
+     * @param User $author
      * @return JsonResponse
      */
-    public function show(string $id): JsonResponse
+    public function show(User $author): JsonResponse
     {
         try {
-            $user = User::withCount(['questions', 'answers', 'comments'])->findOrFail($id);
+            $author->loadCount(['questions', 'answers', 'comments']);
 
             $formattedUser = [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'image_url' => $user->image_url,
-                'score' => $user->score ?? 0,
-                'level' => $user->level ?? 1,
-                'role' => $user->role,
-                'questions_count' => $user->questions_count,
-                'answers_count' => $user->answers_count,
-                'comments_count' => $user->comments_count,
-                'created_at' => $user->created_at,
+                'id' => $author->id,
+                'username' => $author->username,
+                'name' => $author->name,
+                'email' => $author->email,
+                'image_url' => $author->image_url,
+                'score' => $author->score ?? 0,
+                'level' => $author->level ?? 1,
+                'role' => $author->role,
+                'questions_count' => $author->questions_count,
+                'answers_count' => $author->answers_count,
+                'comments_count' => $author->comments_count,
+                'created_at' => $author->created_at,
             ];
 
             return response()->json([

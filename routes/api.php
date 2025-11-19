@@ -65,8 +65,10 @@ Route::get('categories/{category:slug}/questions', [CategoryController::class, '
 Route::apiResource('categories', CategoryController::class)->scoped(['category' => 'slug']);
 
 // Authors routes
-Route::apiResource('authors', AuthorController::class)->only(['index', 'show']);
-Route::get('authors/{user}/questions', [AuthorController::class, 'questions']);
+Route::apiResource('authors', AuthorController::class)
+    ->only(['index', 'show'])
+    ->scoped(['author' => 'username']);
+Route::get('authors/{user:username}/questions', [AuthorController::class, 'questions']);
 
 // User profile routes
 Route::middleware('auth:sanctum')->prefix('user')->group(function () {

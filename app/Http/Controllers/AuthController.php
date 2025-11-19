@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use App\Jobs\FetchUserLevel;
 use App\Notifications\LoginNotification;
+use App\Services\UsernameGenerator;
 
 class AuthController extends Controller
 {
@@ -89,6 +90,12 @@ class AuthController extends Controller
                 'token_type' => $response->json('token_type'),
             ]
         );
+
+        if (empty($user->username)) {
+            $user->update([
+                'username' => UsernameGenerator::generate($user->name, $user->id),
+            ]);
+        }
 
         $user->update(['email_verified_at' => $userArray['email_verified_at']]);
 

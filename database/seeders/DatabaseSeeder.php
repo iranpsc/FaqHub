@@ -14,5 +14,6 @@ class DatabaseSeeder extends Seeder
     {
         //$this->call(MigrateDatabaseSeeder::class);
         $this->call(PersianDataSeeder::class);
+        $this->call(UserUsernameSeeder::class);
     }
 }

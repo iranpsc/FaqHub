@@ -150,7 +150,7 @@ Base URL: `/api`
 - `GET /tags` and `GET /tags/{slug}/questions`
 
 ### Authors & Users
-- `GET /authors` and `GET /authors/{id}`
+- `GET /authors` and `GET /authors/{username}`
 - `GET /user/profile` / `GET /user/stats` / `GET /user/activity` (auth)
 - `POST /user/update-image` (auth)
 
