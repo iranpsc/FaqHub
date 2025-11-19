@@ -134,7 +134,17 @@ class AuthorController extends Controller
     public function show(User $author): JsonResponse
     {
         try {
-            $author->loadCount(['questions', 'answers', 'comments']);
+            $author->loadCount([
+                'questions' => function ($query) {
+                    $query->published();
+                },
+                'answers' => function ($query) {
+                    $query->published();
+                },
+                'comments' => function ($query) {
+                    $query->published();
+                }
+            ]);
 
             $formattedUser = [
                 'id' => $author->id,
