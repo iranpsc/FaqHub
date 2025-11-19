@@ -23,9 +23,9 @@ class UserController extends Controller
         $user = $request->user();
 
         $stats = [
-            'questionsCount' => $user->questions()->count(),
-            'answersCount' => $user->answers()->count(),
-            'commentsCount' => $user->comments()->count(),
+            'questionsCount' => $user->questions()->published()->count(),
+            'answersCount' => $user->answers()->published()->count(),
+            'commentsCount' => $user->comments()->published()->count(),
         ];
 
         return response()->json($stats);
@@ -41,6 +41,7 @@ class UserController extends Controller
 
         // Get recent questions
         $questions = $user->questions()
+            ->published()
             ->latest()
             ->take(5)
             ->get()
@@ -56,6 +57,7 @@ class UserController extends Controller
 
         // Get recent answers
         $answers = $user->answers()
+            ->published()
             ->with('question')
             ->latest()
             ->take(5)
@@ -72,6 +74,7 @@ class UserController extends Controller
 
         // Get recent comments
         $comments = $user->comments()
+            ->published()
             ->with(['commentable' => function ($morphTo) {
                 $morphTo->morphWith([
                     'App\Models\Question' => [],
