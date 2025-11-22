@@ -78,6 +78,10 @@ class QuestionFilterService
                         $q->where('is_correct', true);
                     })->orderBy('created_at', 'desc');
                     return;
+                case 'unpublished':
+                    $query->where('questions.published', false)
+                        ->orderBy('created_at', 'desc');
+                    return;
             }
         }
 
@@ -125,7 +129,8 @@ class QuestionFilterService
                $request->has('most_answers') ||
                $request->has('most_views') ||
                $request->has('unanswered') ||
-               $request->has('unsolved');
+               $request->has('unsolved') ||
+               $request->has('unpublished');
     }
 
     /**
