@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Services\HtmlSanitizer;
 
 class UpdateAnswerRequest extends FormRequest
 {
@@ -22,7 +23,23 @@ class UpdateAnswerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => 'required|string',
+            'content' => 'required|string|max:50000', // Limit content size
         ];
+    }
+
+    /**
+     * Get the validated data with sanitized content.
+     */
+    public function validated($key = null, $default = null): mixed
+    {
+        $validated = parent::validated($key, $default);
+
+        // If getting all validated data, sanitize content
+        if ($key === null && isset($validated['content'])) {
+            $sanitizer = app(HtmlSanitizer::class);
+            $validated['content'] = $sanitizer->sanitize($validated['content']);
+        }
+
+        return $validated;
     }
 }

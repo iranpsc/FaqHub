@@ -17,26 +17,44 @@ return [
 
     'paths' => ['api/*', 'sanctum/csrf-cookie'],
 
-    'allowed_methods' => ['*'],
+    // Only allow specific HTTP methods
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 
-    'allowed_origins' => [
-        'https://faqhub.ir',
-        'http://localhost:8000',
-        'http://127.0.0.1:8000',
-        'http://localhost:3000',
-        'http://127.0.0.1:3000',
-        'http://localhost:3005',
-        'http://127.0.0.1:3005'
-    ],
+    // Allowed origins - strict in production, permissive in development
+    'allowed_origins' => env('APP_ENV', 'production') === 'production'
+        ? ['https://faqhub.ir']
+        : [
+            'https://faqhub.ir',
+            'http://localhost:8000',
+            'http://127.0.0.1:8000',
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'http://localhost:3005',
+            'http://127.0.0.1:3005',
+        ],
 
     'allowed_origins_patterns' => [],
 
-    'allowed_headers' => ['*'],
+    // Only allow specific headers
+    'allowed_headers' => [
+        'Accept',
+        'Authorization',
+        'Content-Type',
+        'X-Requested-With',
+        'X-CSRF-TOKEN',
+    ],
 
-    'exposed_headers' => [],
+    // Expose rate limit headers to the client
+    'exposed_headers' => [
+        'X-RateLimit-Limit',
+        'X-RateLimit-Remaining',
+        'Retry-After',
+    ],
 
-    'max_age' => 0,
+    // Cache preflight requests for 1 hour
+    'max_age' => 3600,
 
-    'supports_credentials' => false,
+    // Enable credentials for cookie-based auth
+    'supports_credentials' => true,
 
 ];

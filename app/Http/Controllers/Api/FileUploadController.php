@@ -3,12 +3,33 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Rules\SecureImage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class FileUploadController extends Controller
 {
+    /**
+     * Allowed image MIME types
+     */
+    protected array $allowedImageMimes = [
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+    ];
+
+    /**
+     * Allowed document MIME types
+     */
+    protected array $allowedDocumentMimes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+    ];
+
     public function __construct()
     {
         // Optional authentication is handled at route level
@@ -19,13 +40,22 @@ class FileUploadController extends Controller
      */
     public function uploadTinyMCEImage(Request $request)
     {
-        // Validate the request
+        // Use SecureImage rule for robust validation
         $validator = Validator::make($request->all(), [
-            'file' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // Max 5MB
+            'file' => [
+                'required',
+                'file',
+                'max:5120', // Max 5MB
+                new SecureImage(
+                    allowedMimeTypes: $this->allowedImageMimes,
+                    maxPixelCount: 25_000_000, // Max 25 megapixels
+                    maxWidth: 4096,
+                    maxHeight: 4096
+                ),
+            ],
         ], [
             'file.required' => 'لطفا یک تصویر انتخاب کنید',
-            'file.image' => 'فایل انتخابی باید یک تصویر باشد',
-            'file.mimes' => 'فرمت تصویر باید از نوع: jpeg, png, jpg, gif, webp باشد',
+            'file.file' => 'فایل انتخابی معتبر نیست',
             'file.max' => 'حجم تصویر نباید بیشتر از 5 مگابایت باشد',
         ]);
 
@@ -38,12 +68,8 @@ class FileUploadController extends Controller
         try {
             $image = $request->file('file');
 
-            // Generate unique filename as recommended by TinyMCE docs
-            $timestamp = time();
-            $microseconds = substr(microtime(), 2, 6);
-            $originalName = pathinfo($image->getClientOriginalName(), PATHINFO_FILENAME);
-            $extension = $image->getClientOriginalExtension();
-            $filename = $originalName . '_' . $timestamp . '_' . $microseconds . '.' . $extension;
+            // Generate secure unique filename (avoid using original name)
+            $filename = $this->generateSecureFilename($image->getClientOriginalExtension());
 
             // Store the image in the 'editor-images' directory
             $path = $image->storeAs('editor-images', $filename, 'public');
@@ -52,7 +78,6 @@ class FileUploadController extends Controller
             $fullUrl = asset('storage/' . $path);
 
             // Return the location as expected by TinyMCE
-            // This MUST be a JSON object with a "location" property as per TinyMCE docs
             return response()->json([
                 'location' => $fullUrl
             ], 200, [
@@ -60,9 +85,8 @@ class FileUploadController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // Return error in TinyMCE expected format
             return response()->json([
-                'error' => 'خطا در آپلود تصویر: ' . $e->getMessage()
+                'error' => 'خطا در آپلود تصویر'
             ], 500);
         }
     }
@@ -72,13 +96,22 @@ class FileUploadController extends Controller
      */
     public function uploadQuillImage(Request $request)
     {
-        // Validate the request
+        // Use SecureImage rule for robust validation
         $validator = Validator::make($request->all(), [
-            'file' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // Max 5MB
+            'file' => [
+                'required',
+                'file',
+                'max:5120', // Max 5MB
+                new SecureImage(
+                    allowedMimeTypes: $this->allowedImageMimes,
+                    maxPixelCount: 25_000_000,
+                    maxWidth: 4096,
+                    maxHeight: 4096
+                ),
+            ],
         ], [
             'file.required' => 'لطفا یک تصویر انتخاب کنید',
-            'file.image' => 'فایل انتخابی باید یک تصویر باشد',
-            'file.mimes' => 'فرمت تصویر باید از نوع: jpeg, png, jpg, gif, webp باشد',
+            'file.file' => 'فایل انتخابی معتبر نیست',
             'file.max' => 'حجم تصویر نباید بیشتر از 5 مگابایت باشد',
         ]);
 
@@ -91,12 +124,8 @@ class FileUploadController extends Controller
         try {
             $image = $request->file('file');
 
-            // Generate unique filename
-            $timestamp = time();
-            $microseconds = substr(microtime(), 2, 6);
-            $originalName = pathinfo($image->getClientOriginalName(), PATHINFO_FILENAME);
-            $extension = $image->getClientOriginalExtension();
-            $filename = $originalName . '_' . $timestamp . '_' . $microseconds . '.' . $extension;
+            // Generate secure unique filename
+            $filename = $this->generateSecureFilename($image->getClientOriginalExtension());
 
             // Store the image in the 'editor-images' directory
             $path = $image->storeAs('editor-images', $filename, 'public');
@@ -104,7 +133,6 @@ class FileUploadController extends Controller
             // Generate the full URL
             $fullUrl = asset('storage/' . $path);
 
-            // Return the location as expected by Quill
             return response()->json([
                 'location' => $fullUrl
             ], 200, [
@@ -113,7 +141,7 @@ class FileUploadController extends Controller
 
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'خطا در آپلود تصویر: ' . $e->getMessage()
+                'error' => 'خطا در آپلود تصویر'
             ], 500);
         }
     }
@@ -123,13 +151,19 @@ class FileUploadController extends Controller
      */
     public function uploadFile(Request $request)
     {
+        $type = $request->input('type', 'general');
+
+        // Build validation rules based on type
+        $rules = $this->getValidationRulesForType($type);
+
         $validator = Validator::make($request->all(), [
-            'file' => 'required|file|max:10240', // Max 10MB
-            'type' => 'sometimes|string|in:document,image,video,audio',
+            'file' => $rules,
+            'type' => 'sometimes|string|in:document,image',
         ], [
             'file.required' => 'لطفا یک فایل انتخاب کنید',
             'file.file' => 'فایل انتخابی معتبر نیست',
-            'file.max' => 'حجم فایل نباید بیشتر از 10 مگابایت باشد',
+            'file.max' => 'حجم فایل بیش از حد مجاز است',
+            'file.mimetypes' => 'نوع فایل مجاز نیست',
         ]);
 
         if ($validator->fails()) {
@@ -141,20 +175,14 @@ class FileUploadController extends Controller
 
         try {
             $file = $request->file('file');
-            $type = $request->input('type', 'general');
 
-            // Generate unique filename
-            $timestamp = time();
-            $originalName = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-            $extension = $file->getClientOriginalExtension();
-            $filename = $originalName . '_' . $timestamp . '.' . $extension;
+            // Generate secure unique filename
+            $filename = $this->generateSecureFilename($file->getClientOriginalExtension());
 
             // Determine storage directory based on type
             $directory = match($type) {
                 'image' => 'images',
                 'document' => 'documents',
-                'video' => 'videos',
-                'audio' => 'audio',
                 default => 'files'
             };
 
@@ -173,7 +201,7 @@ class FileUploadController extends Controller
 
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'خطا در آپلود فایل: ' . $e->getMessage()
+                'message' => 'خطا در آپلود فایل'
             ], 500);
         }
     }
@@ -184,7 +212,29 @@ class FileUploadController extends Controller
     public function deleteFile(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'file_path' => 'required|string',
+            'file_path' => [
+                'required',
+                'string',
+                'max:255',
+                // Prevent path traversal attacks
+                function ($attribute, $value, $fail) {
+                    if (str_contains($value, '..') || str_contains($value, '//')) {
+                        $fail('مسیر فایل نامعتبر است');
+                    }
+                    // Only allow deletion from specific directories
+                    $allowedPrefixes = ['editor-images/', 'images/', 'documents/', 'files/'];
+                    $isAllowed = false;
+                    foreach ($allowedPrefixes as $prefix) {
+                        if (str_starts_with($value, $prefix)) {
+                            $isAllowed = true;
+                            break;
+                        }
+                    }
+                    if (!$isAllowed) {
+                        $fail('حذف این فایل مجاز نیست');
+                    }
+                },
+            ],
         ], [
             'file_path.required' => 'مسیر فایل الزامی است',
         ]);
@@ -214,8 +264,52 @@ class FileUploadController extends Controller
 
         } catch (\Exception $e) {
             return response()->json([
-                'message' => 'خطا در حذف فایل: ' . $e->getMessage()
+                'message' => 'خطا در حذف فایل'
             ], 500);
         }
+    }
+
+    /**
+     * Generate a secure unique filename
+     */
+    protected function generateSecureFilename(string $extension): string
+    {
+        // Sanitize extension
+        $extension = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', $extension));
+
+        // Generate unique filename using UUID
+        return Str::uuid() . '.' . $extension;
+    }
+
+    /**
+     * Get validation rules based on file type
+     */
+    protected function getValidationRulesForType(string $type): array
+    {
+        return match($type) {
+            'image' => [
+                'required',
+                'file',
+                'max:5120', // 5MB
+                new SecureImage(
+                    allowedMimeTypes: $this->allowedImageMimes,
+                    maxPixelCount: 25_000_000,
+                    maxWidth: 4096,
+                    maxHeight: 4096
+                ),
+            ],
+            'document' => [
+                'required',
+                'file',
+                'max:10240', // 10MB
+                'mimetypes:' . implode(',', $this->allowedDocumentMimes),
+            ],
+            default => [
+                'required',
+                'file',
+                'max:5120', // 5MB default
+                'mimetypes:' . implode(',', array_merge($this->allowedImageMimes, $this->allowedDocumentMimes)),
+            ],
+        };
     }
 }

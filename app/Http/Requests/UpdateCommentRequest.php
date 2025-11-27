@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use App\Services\HtmlSanitizer;
 
 class UpdateCommentRequest extends FormRequest
 {
@@ -24,7 +25,36 @@ class UpdateCommentRequest extends FormRequest
     public function rules()
     {
         return [
-            'content' => 'required|string|min:5',
+            'content' => 'required|string|min:5|max:2000', // Reasonable limit for comments
         ];
+    }
+
+    /**
+     * Prepare the data for validation.
+     * Comments should be plain text, so strip all HTML.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('content')) {
+            // Comments are plain text - strip all HTML tags
+            $this->merge([
+                'content' => strip_tags($this->input('content')),
+            ]);
+        }
+    }
+
+    /**
+     * Get the validated data with escaped content.
+     */
+    public function validated($key = null, $default = null): mixed
+    {
+        $validated = parent::validated($key, $default);
+
+        // Escape any remaining special characters for safety
+        if ($key === null && isset($validated['content'])) {
+            $validated['content'] = HtmlSanitizer::escape($validated['content']);
+        }
+
+        return $validated;
     }
 }

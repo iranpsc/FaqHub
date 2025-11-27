@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 use App\Models\Question;
+use App\Services\HtmlSanitizer;
 
 class StoreQuestionRequest extends FormRequest
 {
@@ -25,11 +26,40 @@ class StoreQuestionRequest extends FormRequest
         return [
             'category_id' => 'required|exists:categories,id',
             'title' => 'required|string|max:255',
-            'content' => 'required|string',
-            'tags' => 'required|array|min:1',
+            'content' => 'required|string|max:50000', // Limit content size
+            'tags' => 'required|array|min:1|max:10', // Limit number of tags
             'tags.*' => 'required|array',
             'tags.*.id' => 'required_without:tags.*.name|exists:tags,id',
             'tags.*.name' => 'required_without:tags.*.id|string|max:50',
         ];
+    }
+
+    /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        // Sanitize the title (strip all HTML)
+        if ($this->has('title')) {
+            $this->merge([
+                'title' => strip_tags($this->input('title')),
+            ]);
+        }
+    }
+
+    /**
+     * Get the validated data with sanitized content.
+     */
+    public function validated($key = null, $default = null): mixed
+    {
+        $validated = parent::validated($key, $default);
+
+        // If getting all validated data, sanitize content
+        if ($key === null && isset($validated['content'])) {
+            $sanitizer = app(HtmlSanitizer::class);
+            $validated['content'] = $sanitizer->sanitize($validated['content']);
+        }
+
+        return $validated;
     }
 }
