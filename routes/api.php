@@ -70,8 +70,8 @@ Route::middleware(['throttle.api'])->group(function () {
     Route::post('answers/{answer}/toggle-correctness', [AnswerController::class, 'toggleCorrectness']);
 
     // Comments with create rate limiting
-    Route::get('questions/{question}/comments', [CommentController::class, 'index']);
-    Route::get('answers/{answer}/comments', [CommentController::class, 'index']);
+    Route::get('questions/{question}/comments', [CommentController::class, 'index'])->name('questions.comments.index');
+    Route::get('answers/{answer}/comments', [CommentController::class, 'index'])->name('answers.comments.index');
     Route::middleware('throttle.api:create')->post('questions/{question}/comments', [CommentController::class, 'store']);
     Route::middleware('throttle.api:create')->post('answers/{answer}/comments', [CommentController::class, 'store']);
     Route::middleware('throttle.api:create')->put('comments/{comment}', [CommentController::class, 'update']);

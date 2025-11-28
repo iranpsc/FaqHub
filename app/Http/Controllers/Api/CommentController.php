@@ -34,13 +34,17 @@ class CommentController extends Controller
         } elseif ($parent instanceof Answer) {
             $comments = $parent->comments()->visible($user)->with('user', 'votes')->latest()->paginate(10);
         } else {
-            // Legacy route binding - determine parent type
-            if (request()->route()->getName() === 'questions.comments.index') {
+            // Fallback: if parent is not a model instance, assume it's an ID and determine type from route
+            $routeName = request()->route()->getName();
+            if ($routeName === 'questions.comments.index') {
                 $question = Question::findOrFail($parent);
                 $comments = $question->comments()->visible($user)->with('user', 'votes')->latest()->paginate(10);
-            } elseif (request()->route()->getName() === 'answers.comments.index') {
+            } elseif ($routeName === 'answers.comments.index') {
                 $answer = Answer::findOrFail($parent);
                 $comments = $answer->comments()->visible($user)->with('user', 'votes')->latest()->paginate(10);
+            } else {
+                // If we can't determine the parent type, return empty collection
+                $comments = collect();
             }
         }
 

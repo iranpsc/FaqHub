@@ -113,7 +113,7 @@ class ActivityService
                 ->limit($limits['questions'])
                 ->get()
                 ->map(function ($question) {
-                    $activityDate = $question->published_at;
+                    $activityDate = $question->created_at;
                     return [
                         'id' => 'question_' . $question->id,
                         'type' => 'question',
@@ -144,7 +144,7 @@ class ActivityService
                 ->limit($limits['answers'])
                 ->get()
                 ->map(function ($answer) {
-                    $activityDate = $answer->published_at;
+                    $activityDate = $answer->created_at;
                     return [
                         'id' => 'answer_' . $answer->id,
                         'type' => 'answer',
@@ -186,7 +186,7 @@ class ActivityService
                 ->map(function ($comment) {
                     $title = '';
                     $questionSlug = null;
-                    $activityDate = $comment->published_at;
+                    $activityDate = $comment->created_at;
 
                     if ($comment->commentable_type === 'App\Models\Question') {
                         $question = Question::select(['id', 'title', 'slug'])->find($comment->commentable_id);
