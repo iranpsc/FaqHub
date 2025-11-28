@@ -12,12 +12,10 @@ use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\FileUploadController;
 use Illuminate\Support\Facades\Route;
 
-// Apply default API rate limiting to all routes
-Route::middleware(['throttle.api'])->group(function () {
 
     // Auth routes with stricter rate limiting
     Route::prefix('auth')->group(function () {
-        Route::middleware(['guest', 'throttle.api:auth'])->group(function () {
+        Route::middleware(['guest'])->group(function () {
             Route::post('/redirect', [AuthController::class, 'redirect'])->name('auth.redirect');
         });
 
@@ -31,18 +29,16 @@ Route::middleware(['throttle.api'])->group(function () {
     Route::prefix('questions')->group(function () {
         Route::get('/recommended', [DashboardController::class, 'recommendedQuestions']);
         Route::get('/popular', [DashboardController::class, 'popularQuestions']);
-        Route::middleware('throttle.api:search')->get('/search', [QuestionController::class, 'search']);
+        Route::get('/search', [QuestionController::class, 'search']);
     });
 
     // Category popular route (must be before resource routes)
     Route::get('categories/popular', [CategoryController::class, 'popular']);
 
-    // Voting routes with specific rate limiting
-    Route::middleware('throttle.api:vote')->group(function () {
-        Route::post('questions/{question}/vote', [QuestionController::class, 'vote']);
-        Route::post('answers/{answer}/vote', [AnswerController::class, 'vote']);
-        Route::post('comments/{comment}/vote', [CommentController::class, 'vote']);
-    });
+    // Voting routes
+    Route::post('questions/{question}/vote', [QuestionController::class, 'vote']);
+    Route::post('answers/{answer}/vote', [AnswerController::class, 'vote']);
+    Route::post('comments/{comment}/vote', [CommentController::class, 'vote']);
 
     Route::post('questions/{question}/publish', [QuestionController::class, 'publish']);
     Route::post('questions/{question}/pin', [QuestionController::class, 'pin']);
@@ -52,9 +48,9 @@ Route::middleware(['throttle.api'])->group(function () {
 
     // Question CRUD with create rate limiting
     Route::get('questions', [QuestionController::class, 'index']);
-    Route::middleware('throttle.api:create')->post('questions', [QuestionController::class, 'store']);
+    Route::post('questions', [QuestionController::class, 'store']);
     Route::get('questions/{question:slug}', [QuestionController::class, 'show']);
-    Route::middleware('throttle.api:create')->put('questions/{question}', [QuestionController::class, 'update']);
+    Route::put('questions/{question}', [QuestionController::class, 'update']);
     Route::delete('questions/{question}', [QuestionController::class, 'destroy']);
 
     Route::get('tags/{tag:slug}/questions', [TagController::class, 'questions']);
@@ -62,8 +58,8 @@ Route::middleware(['throttle.api'])->group(function () {
 
     // Answers with create rate limiting
     Route::get('questions/{question:id}/answers', [AnswerController::class, 'index']);
-    Route::middleware('throttle.api:create')->post('questions/{question:id}/answers', [AnswerController::class, 'store']);
-    Route::middleware('throttle.api:create')->put('answers/{answer}', [AnswerController::class, 'update']);
+    Route::post('questions/{question:id}/answers', [AnswerController::class, 'store']);
+    Route::put('answers/{answer}', [AnswerController::class, 'update']);
     Route::delete('answers/{answer}', [AnswerController::class, 'destroy']);
 
     Route::post('answers/{answer}/publish', [AnswerController::class, 'publish']);
@@ -72,9 +68,9 @@ Route::middleware(['throttle.api'])->group(function () {
     // Comments with create rate limiting
     Route::get('questions/{question}/comments', [CommentController::class, 'index'])->name('questions.comments.index');
     Route::get('answers/{answer}/comments', [CommentController::class, 'index'])->name('answers.comments.index');
-    Route::middleware('throttle.api:create')->post('questions/{question}/comments', [CommentController::class, 'store']);
-    Route::middleware('throttle.api:create')->post('answers/{answer}/comments', [CommentController::class, 'store']);
-    Route::middleware('throttle.api:create')->put('comments/{comment}', [CommentController::class, 'update']);
+    Route::post('questions/{question}/comments', [CommentController::class, 'store']);
+    Route::post('answers/{answer}/comments', [CommentController::class, 'store']);
+    Route::put('comments/{comment}', [CommentController::class, 'update']);
     Route::delete('comments/{comment}', [CommentController::class, 'destroy']);
     Route::post('comments/{comment}/publish', [CommentController::class, 'publish']);
 
@@ -92,12 +88,12 @@ Route::middleware(['throttle.api'])->group(function () {
         Route::get('/profile', [UserController::class, 'profile']);
         Route::get('/stats', [UserController::class, 'stats']);
         Route::get('/activity', [UserController::class, 'activity']);
-        Route::middleware('throttle.api:upload')->post('/update-image', [UserController::class, 'updateImage']);
+        Route::post('/update-image', [UserController::class, 'updateImage']);
         Route::post('/settings', [UserController::class, 'updateSettings']);
     });
 
     // File upload routes with upload rate limiting
-    Route::middleware(['auth.optional', 'throttle.api:upload'])->prefix('upload')->group(function () {
+    Route::middleware(['auth.optional'])->prefix('upload')->group(function () {
         Route::post('/tinymce-image', [FileUploadController::class, 'uploadTinyMCEImage']);
         Route::post('/quill-image', [FileUploadController::class, 'uploadQuillImage']);
         Route::post('/file', [FileUploadController::class, 'uploadFile']);
@@ -110,5 +106,3 @@ Route::middleware(['throttle.api'])->group(function () {
         Route::get('/active-users', [DashboardController::class, 'activeUsers']);
         Route::get('/activity', [DashboardController::class, 'activity']);
     });
-
-}); // End of rate limiting group
