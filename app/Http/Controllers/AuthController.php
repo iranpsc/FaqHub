@@ -71,8 +71,8 @@ class AuthController extends Controller
             'Accept' => 'application/json',
             'Authorization' => 'Bearer ' . $accessToken,
         ])
-        ->acceptJson()
-        ->get(config('services.oauth.url') . '/api/user');
+            ->acceptJson()
+            ->get(config('services.oauth.url') . '/api/user');
 
         $userArray = $userResponse->json();
 
@@ -99,7 +99,7 @@ class AuthController extends Controller
 
         $user->update(['email_verified_at' => $userArray['email_verified_at']]);
 
-        if($user->wasChanged('email_verified_at')) {
+        if ($user->wasChanged('email_verified_at')) {
             $user->increment('score', 10); // Increment score for new user
         }
 
@@ -119,7 +119,7 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth-token')->plainTextToken;
 
-                // Get cached intended URL and clean up session
+        // Get cached intended URL and clean up session
         $intendedUrl = cache()->pull('intended_url');
 
         // Validate and sanitize the intended URL
