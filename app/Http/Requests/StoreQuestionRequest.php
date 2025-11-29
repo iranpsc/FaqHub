@@ -39,11 +39,25 @@ class StoreQuestionRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        // Sanitize the title (strip all HTML)
+        $sanitizer = app(HtmlSanitizer::class);
+
+        // Sanitize the title (remove all HTML)
         if ($this->has('title')) {
             $this->merge([
-                'title' => strip_tags($this->input('title')),
+                'title' => $sanitizer->sanitize($this->input('title')),
             ]);
+        }
+
+        // Sanitize tag names
+        if ($this->has('tags') && is_array($this->input('tags'))) {
+            $sanitizedTags = [];
+            foreach ($this->input('tags') as $tag) {
+                if (isset($tag['name'])) {
+                    $tag['name'] = $sanitizer->sanitize($tag['name']);
+                }
+                $sanitizedTags[] = $tag;
+            }
+            $this->merge(['tags' => $sanitizedTags]);
         }
     }
 
