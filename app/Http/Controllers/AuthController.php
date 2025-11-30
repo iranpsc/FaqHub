@@ -138,7 +138,19 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $userData = [
+            'id' => $request->user()->id,
+            'name' => $request->user()->name,
+            'username' => $request->user()->username,
+            'code' => $request->user()->code,
+            'level' => $request->user()->level,
+            'score' => $request->user()->score,
+            'image' => $request->user()->image_url,
+            'role' => $request->user()->role,
+            'login_notification_enabled' => $request->user()->login_notification_enabled,
+        ];
+
+        return response()->json($userData);
     }
 
 
