@@ -14,6 +14,25 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return parent::toArray($request);
+        return [
+            'id' => $this->id,
+            'name' => $this->name,
+            'username' => $this->username,
+            'email' => $this->handleVisibility($request, $this->email) ? $this->email : null,
+            'mobile' => $this->handleVisibility($request,$this->mobile) ? $this->mobile : null,
+            'code' => $this->handleVisibility($request,$this->code) ? $this->code : null,
+            'level' => $this->level,
+            'score' => $this->score,
+            'image' => $this->image_url,
+        ];
+    }
+
+    private function handleVisibility(Request $request, $value)
+    {
+        if(!$request->user()) {
+            return false;
+        }
+
+        return $request->user()->id === $this->id;
     }
 }
