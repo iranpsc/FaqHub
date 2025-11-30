@@ -117,7 +117,9 @@ class AuthController extends Controller
         // Dispatch job to fetch user level
         FetchUserLevel::dispatch($user);
 
-        $token = $user->createToken('auth-token')->plainTextToken;
+        $tokenExpiry = now()->addHour();
+
+        $token = $user->createToken('auth-token', ['*'], $tokenExpiry)->plainTextToken;
 
         // Get cached intended URL and clean up session
         $intendedUrl = cache()->pull('intended_url');
