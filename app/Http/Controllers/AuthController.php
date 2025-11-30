@@ -147,7 +147,7 @@ class AuthController extends Controller
             'code' => $request->user()->code,
             'level' => $request->user()->level,
             'score' => $request->user()->score,
-            'image' => $request->user()->image_url,
+            'image_url' => $request->user()->image_url,
             'role' => $request->user()->role,
             'login_notification_enabled' => $request->user()->login_notification_enabled,
         ];
