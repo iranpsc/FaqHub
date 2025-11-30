@@ -305,19 +305,28 @@ class HtmlSanitizer
     protected function sanitizeUrl(string $url, bool $allowDataImages = false): ?string
     {
         $url = trim($url);
+
+        // Allow empty URLs (for placeholder images)
+        if (empty($url)) {
+            return $url;
+        }
+
         $lowerUrl = strtolower($url);
+
+        // Allow data:image/* for images
+        if ($allowDataImages && str_starts_with($lowerUrl, 'data:image/')) {
+            return $url;
+        }
 
         // Block dangerous protocols
         foreach ($this->dangerousProtocols as $protocol) {
             if (str_starts_with($lowerUrl, $protocol)) {
-                // Allow data:image/* for images
-                if ($allowDataImages && str_starts_with($lowerUrl, 'data:image/')) {
-                    return $url;
-                }
                 return null;
             }
         }
 
+        // Allow relative URLs, absolute URLs, and protocol-relative URLs
+        // (http://, https://, //, /, ./)
         return $url;
     }
 
