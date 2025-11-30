@@ -25,7 +25,7 @@ class UpdateCommentRequest extends FormRequest
     public function rules()
     {
         return [
-            'content' => 'required|string|min:5|max:2000', // Reasonable limit for comments
+            'content' => 'required|string|min:5|max:20000', // Reasonable limit for comments
         ];
     }
 

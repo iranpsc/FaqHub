@@ -23,7 +23,7 @@ class StoreCommentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => 'required|string|max:2000', // Reasonable limit for comments
+            'content' => 'required|string|max:20000', // Reasonable limit for comments
         ];
     }
 
