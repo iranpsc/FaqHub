@@ -23,7 +23,7 @@ class UpdateAnswerRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'content' => 'required|string|max:500000', // Limit content size
+            'content' => 'required|string|max:5000000', // Limit content size
         ];
     }
 

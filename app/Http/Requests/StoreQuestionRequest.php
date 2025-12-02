@@ -26,7 +26,7 @@ class StoreQuestionRequest extends FormRequest
         return [
             'category_id' => 'required|exists:categories,id',
             'title' => 'required|string|max:255',
-            'content' => 'required|string|max:500000', // Limit content size
+            'content' => 'required|string|max:5000000', // Limit content size
             'tags' => 'required|array|min:1|max:10', // Limit number of tags
             'tags.*' => 'required|array',
             'tags.*.id' => 'required_without:tags.*.name|exists:tags,id',
