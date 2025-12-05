@@ -29,6 +29,8 @@
         table, td {
             mso-table-lspace: 0pt;
             mso-table-rspace: 0pt;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         img {
@@ -78,6 +80,8 @@
         /* Content */
         .email-content {
             padding: 40px 30px !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         .greeting {
@@ -86,6 +90,8 @@
             margin-bottom: 20px !important;
             font-weight: 600 !important;
             padding: 0 !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         .message-text {
@@ -94,6 +100,8 @@
             margin-bottom: 15px !important;
             line-height: 1.8 !important;
             padding: 0 !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         /* Info box */
@@ -103,12 +111,16 @@
             border-radius: 8px !important;
             padding: 20px !important;
             margin: 20px 0 !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         .info-item {
             margin-bottom: 10px !important;
             padding: 8px 0 !important;
             border-bottom: 1px solid #e2e8f0 !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         .info-item:last-child {
@@ -122,12 +134,18 @@
             font-size: 14px !important;
             display: inline-block !important;
             width: 120px !important;
+            text-align: right !important;
+            direction: rtl !important;
+            margin-left: 10px !important;
+            margin-right: 0 !important;
         }
 
         .info-value {
             color: #4a5568 !important;
             font-size: 14px !important;
             font-family: 'Courier New', monospace !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         /* Button */
@@ -156,6 +174,8 @@
             border-radius: 8px !important;
             padding: 20px !important;
             margin: 20px 0 !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         .warning-text {
@@ -164,6 +184,8 @@
             font-weight: 500 !important;
             margin: 0 !important;
             padding: 0 !important;
+            direction: rtl !important;
+            text-align: right !important;
         }
 
         /* Footer */
@@ -227,20 +249,20 @@
     </style>
 </head>
 <body>
-    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" dir="rtl" style="direction: rtl;">
         <tr>
-            <td align="center" style="background-color: #f8f9fa; padding: 20px 0;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" class="email-container">
+            <td align="center" style="background-color: #f8f9fa; padding: 20px 0; direction: rtl;">
+                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" class="email-container" dir="rtl" style="direction: rtl;">
                     <!-- Header -->
                     <tr>
-                        <td class="email-header">
+                        <td class="email-header" align="center" dir="rtl" style="direction: rtl;">
                             <h1>{{ config('app.name') }}</h1>
                         </td>
                     </tr>
 
                     <!-- Content -->
                     <tr>
-                        <td class="email-content">
+                        <td class="email-content" align="right" dir="rtl" style="direction: rtl; text-align: right;">
                             <div class="greeting">
                                 سلام! {{ $notifiable->name }}
                             </div>
@@ -249,9 +271,9 @@
                                 ورود جدیدی به حساب کاربری شما انجام شده است.
                             </div>
 
-                            <table class="info-box" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <table class="info-box" cellspacing="0" cellpadding="0" border="0" width="100%" dir="rtl" style="direction: rtl; text-align: right;">
                                 <tr>
-                                    <td>
+                                    <td align="right" dir="rtl" style="direction: rtl; text-align: right;">
                                         <div class="info-item">
                                             <span class="info-label">زمان ورود:</span>
                                             <span class="info-value">{{ $loginTime }}</span>
@@ -288,7 +310,7 @@
 
                     <!-- Footer -->
                     <tr>
-                        <td class="email-footer">
+                        <td class="email-footer" align="center" dir="rtl" style="direction: rtl;">
                             <p class="footer-text">
                                 این ایمیل به صورت خودکار ارسال شده است. لطفاً به آن پاسخ ندهید.
                             </p>
