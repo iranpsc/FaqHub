@@ -121,9 +121,9 @@ class ActivityService
                     return [
                         'id' => 'question_' . $question->id,
                         'type' => 'question',
-                        'user_name' => $question->user->name,
-                        'user_id' => $question->user->id,
-                        'user_image' => $question->user->image_url,
+                        'user_name' => $question->user->name ?? 'کاربر ناشناس',
+                        'user_id' => $question->user->id ?? null,
+                        'user_image' => $question->user->image_url ?? null,
                         'title' => $question->title,
                         'slug' => $question->slug,
                         'question_id' => $question->id,
