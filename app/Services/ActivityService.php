@@ -118,17 +118,18 @@ class ActivityService
                 ->limit($limits['questions'])
                 ->get()
                 ->map(function ($question) {
+                    $userName = $question->user->name ?? 'کاربر ناشناس';
                     return [
                         'id' => 'question_' . $question->id,
                         'type' => 'question',
-                        'user_name' => $question->user->name ?? 'کاربر ناشناس',
+                        'user_name' => $userName,
                         'user_id' => $question->user->id ?? null,
                         'user_image' => $question->user->image_url ?? null,
                         'title' => $question->title,
                         'slug' => $question->slug,
                         'question_id' => $question->id,
                         'category_name' => $question->category->name ?? null,
-                        'description' => "کاربر '{$question->user->name}' سوال جدیدی با عنوان '{$question->title}' پرسید",
+                        'description' => "کاربر '{$userName}' سوال جدیدی با عنوان '{$question->title}' پرسید",
                         'created_at' => $question->created_at,
                         'url' => "/questions/{$question->slug}",
                         'month' => $this->getPersianMonth($question->created_at)
@@ -148,15 +149,16 @@ class ActivityService
                 ->limit($limits['answers'])
                 ->get()
                 ->map(function ($answer) {
+                    $userName = $answer->user->name ?? 'کاربر ناشناس';
                     return [
                         'id' => 'answer_' . $answer->id,
                         'type' => 'answer',
-                        'user_name' => $answer->user->name,
-                        'user_id' => $answer->user->id,
-                        'user_image' => $answer->user->image_url,
+                        'user_name' => $userName,
+                        'user_id' => $answer->user->id ?? null,
+                        'user_image' => $answer->user->image_url ?? null,
                         'title' => $answer->question->title,
                         'question_id' => $answer->question->id,
-                        'description' => "کاربر '{$answer->user->name}' به سوال '{$answer->question->title}' پاسخ داد",
+                        'description' => "کاربر '{$userName}' به سوال '{$answer->question->title}' پاسخ داد",
                         'created_at' => $answer->created_at,
                         'url' => "/questions/{$answer->question->slug}",
                         'is_correct' => $answer->is_correct,
@@ -205,15 +207,18 @@ class ActivityService
                         }
                     }
 
+                    $userName = $comment->name ?? 'کاربر ناشناس';
+                    $displayTitle = $title ?: 'محتوای حذف شده';
+
                     return [
                         'id' => 'comment_' . $comment->id,
                         'type' => 'comment',
-                        'user_name' => $comment->name,
+                        'user_name' => $userName,
                         'user_id' => $comment->user_id,
                         'user_image' => $comment->image ? asset('storage/' . $comment->image) : null,
                         'title' => $title,
                         'question_slug' => $questionSlug,
-                        'description' => "کاربر '{$comment->name}' نظری در '{$title}' ثبت کرد",
+                        'description' => "کاربر '{$userName}' نظری در '{$displayTitle}' ثبت کرد",
                         'created_at' => $comment->created_at,
                         'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
                         'month' => $this->getPersianMonth($comment->created_at)
