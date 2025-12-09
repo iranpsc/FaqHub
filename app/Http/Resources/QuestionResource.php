@@ -35,6 +35,13 @@ class QuestionResource extends JsonResource
             'category' => new CategoryResource($this->whenLoaded('category')),
             'tags' => TagResource::collection($this->whenLoaded('tags')),
             'answers_count' => $this->whenCounted('answers'),
+            'unpublished_answers_count' => isset($this->resource->unpublished_answers_count) 
+                ? (int) $this->resource->unpublished_answers_count 
+                : 0,
+            'comments_count' => $this->whenCounted('comments', 0),
+            'unpublished_comments_count' => isset($this->resource->unpublished_comments_count) 
+                ? (int) $this->resource->unpublished_comments_count 
+                : 0,
             'votes_count' => $this->whenCounted('votes'),
             'votes' => [
                 'upvotes' => $this->whenLoaded('upVotes'),

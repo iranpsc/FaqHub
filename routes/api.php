@@ -68,8 +68,8 @@ use Illuminate\Support\Facades\Route;
     // Comments with create rate limiting
     Route::get('questions/{question}/comments', [CommentController::class, 'index'])->name('questions.comments.index');
     Route::get('answers/{answer}/comments', [CommentController::class, 'index'])->name('answers.comments.index');
-    Route::post('questions/{question}/comments', [CommentController::class, 'store']);
-    Route::post('answers/{answer}/comments', [CommentController::class, 'store']);
+    Route::post('questions/{question}/comments', [CommentController::class, 'store'])->name('questions.comments.store');
+    Route::post('answers/{answer}/comments', [CommentController::class, 'store'])->name('answers.comments.store');
     Route::put('comments/{comment}', [CommentController::class, 'update']);
     Route::delete('comments/{comment}', [CommentController::class, 'destroy']);
     Route::post('comments/{comment}/publish', [CommentController::class, 'publish']);

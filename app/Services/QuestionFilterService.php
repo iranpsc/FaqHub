@@ -22,7 +22,17 @@ class QuestionFilterService
 
         // Apply base query with relations and counts
         $query = $query->with('user', 'category', 'tags')
-            ->withCount('votes', 'answers')
+            ->withCount([
+                'votes',
+                'answers',
+                'comments',
+                'answers as unpublished_answers_count' => function ($query) {
+                    $query->where('published', false);
+                },
+                'comments as unpublished_comments_count' => function ($query) {
+                    $query->where('published', false);
+                }
+            ])
             ->visible($user)
             ->withUserPinStatus($user)
             ->withUserFeatureStatus($user);

@@ -41,7 +41,19 @@ class QuestionController extends Controller
         $limit = $request->get('limit', 10);
 
         $questions = Question::with('user', 'category')
-            ->withCount('votes', 'upVotes', 'downVotes', 'answers')
+            ->withCount([
+                'votes',
+                'upVotes',
+                'downVotes',
+                'answers',
+                'comments',
+                'answers as unpublished_answers_count' => function ($query) {
+                    $query->where('published', false);
+                },
+                'comments as unpublished_comments_count' => function ($query) {
+                    $query->where('published', false);
+                }
+            ])
             ->published()
             ->where('title', 'like', '%' . $query . '%')
             ->orderByDesc('views')
@@ -144,7 +156,19 @@ class QuestionController extends Controller
             'upVotes',
             'downVotes',
             'comments'
-        ])->loadCount('votes', 'upVotes', 'downVotes', 'answers');
+        ])->loadCount([
+            'votes',
+            'upVotes',
+            'downVotes',
+            'answers',
+            'comments',
+            'answers as unpublished_answers_count' => function ($query) {
+                $query->where('published', false);
+            },
+            'comments as unpublished_comments_count' => function ($query) {
+                $query->where('published', false);
+            }
+        ]);
     }
 
     /**
