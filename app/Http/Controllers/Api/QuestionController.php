@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateQuestionRequest;
 use App\Http\Resources\QuestionResource;
 use App\Models\Question;
+use App\Services\ActivityLogger;
 use App\Services\QuestionFilterService;
 use Illuminate\Http\Request;
 use App\Http\Requests\StoreQuestionRequest;
@@ -13,7 +14,8 @@ use App\Http\Requests\StoreQuestionRequest;
 class QuestionController extends Controller
 {
     public function __construct(
-        private QuestionFilterService $questionFilterService
+        private QuestionFilterService $questionFilterService,
+        private ActivityLogger $activityLogger
     ) {
         $this->middleware('auth.optional')->only(['search', 'index', 'show']);
         $this->middleware('auth:sanctum')->except(['search', 'index', 'show']);
@@ -86,12 +88,17 @@ class QuestionController extends Controller
         $tagIds = $this->processTags($request->tags);
         $question->tags()->sync($tagIds);
 
+        // Log question creation
+        $this->activityLogger->logQuestionCreated($question, $user);
+
         if ($user->can('publish', $question)) {
             $question->update([
                 'published' => true,
                 'published_at' => now(),
                 'published_by' => $user->id,
             ]);
+            // Log publishing
+            $this->activityLogger->logPublishing($question, $user);
         }
 
         $question->load('user', 'category', 'tags', 'upVotes', 'downVotes');
@@ -222,6 +229,9 @@ class QuestionController extends Controller
             'published_by' => $user->id,
         ]);
 
+        // Log publishing
+        $this->activityLogger->logPublishing($question, $user);
+
         // Award 2 points for publishing a question
         $user->increment('score', 2);
 
@@ -266,6 +276,9 @@ class QuestionController extends Controller
             'type' => $voteType,
             'last_voted_at' => now()
         ]);
+
+        // Log voting
+        $this->activityLogger->logVote($question, $request->user(), $voteType);
 
         if ($voteType == 'up') {
             $question->user?->increment('score', 10);
@@ -347,6 +360,9 @@ class QuestionController extends Controller
         // Update question's featured status
         $question->update(['featured' => true]);
 
+        // Log featuring
+        $this->activityLogger->logFeaturing($question, $user);
+
         return response()->json([
             'success' => true,
             'message' => 'سوال با موفقیت ویژه شد',
@@ -371,6 +387,9 @@ class QuestionController extends Controller
             'featured_at' => now(),
             'type' => 'unfeatured'
         ]);
+
+        // Log unfeaturing
+        $this->activityLogger->logUnfeaturing($question, $user);
 
         return response()->json([
             'success' => true,

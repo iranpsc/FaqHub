@@ -10,12 +10,14 @@ use App\Models\Answer;
 use App\Models\Comment;
 use App\Models\Question;
 use App\Notifications\QuestionInteractionNotification;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 
 class CommentController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private ActivityLogger $activityLogger
+    ) {
         $this->middleware('auth:sanctum')->except(['index', 'show']);
         $this->middleware('auth.optional')->only(['index', 'show']);
 
@@ -105,12 +107,19 @@ class CommentController extends Controller
             }
         }
 
-        if ($comment && $user->can('publish', $comment)) {
-            $comment->update([
-                'published' => true,
-                'published_at' => now(),
-                'published_by' => $user->id,
-            ]);
+        // Log comment creation
+        if ($comment) {
+            $this->activityLogger->logCommentCreated($comment, $user);
+
+            if ($user->can('publish', $comment)) {
+                $comment->update([
+                    'published' => true,
+                    'published_at' => now(),
+                    'published_by' => $user->id,
+                ]);
+                // Log publishing
+                $this->activityLogger->logPublishing($comment, $user);
+            }
         }
 
         return response()->json([
@@ -147,6 +156,9 @@ class CommentController extends Controller
             'published_at' => now(),
             'published_by' => $user->id,
         ]);
+
+        // Log publishing
+        $this->activityLogger->logPublishing($comment, $user);
 
         // Award 2 points for publishing a comment
         $user->increment('score', 2);
@@ -195,6 +207,9 @@ class CommentController extends Controller
             'type' => $voteType,
             'last_voted_at' => now()
         ]);
+
+        // Log voting
+        $this->activityLogger->logVote($comment, $request->user(), $voteType);
 
         // Return updated vote counts and user vote status
         $comment->load('upVotes', 'downVotes');

@@ -9,12 +9,14 @@ use App\Http\Resources\AnswerResource;
 use App\Models\Answer;
 use App\Models\Question;
 use App\Notifications\QuestionInteractionNotification;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 
 class AnswerController extends Controller
 {
-    public function __construct()
-    {
+    public function __construct(
+        private ActivityLogger $activityLogger
+    ) {
         $this->middleware('auth:sanctum')->except(['index']);
         $this->middleware('auth.optional')->only(['index']);
 
@@ -82,6 +84,9 @@ class AnswerController extends Controller
             'published' => false, // All answers are unpublished by default
         ]);
 
+        // Log answer creation
+        $this->activityLogger->logAnswerCreated($answer, $user);
+
         return new AnswerResource($answer);
     }
 
@@ -119,6 +124,9 @@ class AnswerController extends Controller
             'published_at' => now(),
             'published_by' => $user->id,
         ]);
+
+        // Log publishing
+        $this->activityLogger->logPublishing($answer, $user);
 
         // Award 3 points for publishing an answer
         $user->increment('score', 3);
@@ -171,6 +179,9 @@ class AnswerController extends Controller
             'last_voted_at' => now()
         ]);
 
+        // Log voting
+        $this->activityLogger->logVote($answer, $request->user(), $voteType);
+
         if ($voteType == 'up') {
             $answer->user->increment('score', 10);
         } elseif ($voteType == 'down') {
@@ -208,6 +219,9 @@ class AnswerController extends Controller
 
         // Update answer correctness
         $answer->update(['is_correct' => !$currentCorrectness]);
+
+        // Log correctness marking
+        $this->activityLogger->logAnswerCorrectness($answer, $user, !$currentCorrectness);
 
         // Score adjustments (only affect answer owner)
         if (!$currentCorrectness) { // now became correct

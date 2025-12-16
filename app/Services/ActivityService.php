@@ -6,283 +6,300 @@ use App\Models\Answer;
 use App\Models\Comment;
 use App\Models\Question;
 use Carbon\Carbon;
+use Spatie\Activitylog\Models\Activity;
 
 class ActivityService
 {
     /**
-     * Generate activity report for a specific period with selective loading
+     * Get activities with chronological pagination
      *
-     * Returns most recent activities for questions, answers and comments in the chosen time period.
-     * Only returns published resources, sorted descending by created_at.
+     * Returns activities from activity_log table, paginated by limit/offset.
+     * Activities are grouped by Persian month for frontend display.
      *
-     * @param int $months Number of months to generate report for
-     * @param int $offset Number of months to offset from current date
-     * @param array $limits Activity limits per type per month
+     * @param int $limit Number of activities to return (default: 30)
+     * @param int $offset Number of activities to skip (default: 0)
      * @return array
      */
-    public function generateActivityReport(int $months = 3, int $offset = 0, array $limits = []): array
+    public function getActivities(int $limit = 30, int $offset = 0): array
     {
-        $defaultLimits = [
-            'questions' => 10,
-            'answers' => 8,
-            'comments' => 5
-        ];
-
-        $limits = array_merge($defaultLimits, $limits);
-        $months = max(1, $months);
+        $limit = max(1, min(100, $limit)); // Clamp between 1 and 100
         $offset = max(0, $offset);
 
-        $now = Carbon::now();
-        $endDate = $offset === 0
-            ? $now->copy()
-            : $now->copy()->subMonths($offset)->endOfMonth();
-        $startDate = $now->copy()->subMonths($offset + $months - 1)->startOfMonth();
+        // Query activity_log table, ordered by created_at descending
+        // Eager load causer (user) - subject relationships are polymorphic and handled in transform methods
+        $logs = Activity::with(['causer:id,name,image', 'subject'])
+            ->orderByDesc('created_at')
+            ->skip($offset)
+            ->take($limit)
+            ->get();
 
-        $periodStart = $startDate->copy();
-        $periodEnd = $endDate->copy();
+        $activities = $logs->map(function ($log) {
+            return $this->transformLogToActivity($log);
+        })->filter(function ($activity) {
+            // Filter out activities with invalid data
+            return $activity !== null;
+        })->values();
 
-        $allActivities = collect();
+        // Group activities by Persian month
         $groupedActivities = [];
-
-        // Generate activities for each month in the period (newest to oldest)
-        $currentMonth = $periodEnd->copy()->startOfMonth();
-        $iterations = 0;
-        while ($currentMonth->gte($periodStart) && $iterations < $months) {
-            $monthStart = $currentMonth->copy()->startOfMonth();
-            $monthEnd = $currentMonth->copy()->endOfMonth();
-
-            if ($monthStart->lt($periodStart)) {
-                $monthStart = $periodStart->copy();
+        foreach ($activities as $activity) {
+            $month = $activity['month'] ?? 'نامشخص';
+            if (!isset($groupedActivities[$month])) {
+                $groupedActivities[$month] = [];
             }
-
-            if ($monthEnd->gt($periodEnd)) {
-                $monthEnd = $periodEnd->copy();
-            }
-
-            $monthActivities = $this->getSelectiveActivitiesForPeriod(
-                $monthStart,
-                $monthEnd,
-                $limits
-            );
-
-            if ($monthActivities->isNotEmpty()) {
-                $monthName = $this->getPersianMonth($monthStart);
-                // Sort month activities by created_at descending before storing
-                $sortedMonthActivities = $monthActivities->sortByDesc('created_at')->values();
-                $groupedActivities[$monthName] = $sortedMonthActivities->all();
-                $allActivities = $allActivities->merge($sortedMonthActivities);
-            }
-
-            $currentMonth = $currentMonth->subMonth()->startOfMonth();
-            $iterations++;
+            $groupedActivities[$month][] = $activity;
         }
 
-        // Sort all activities by created_at descending (most recent first)
-        $allActivities = $allActivities->sortByDesc('created_at')->values();
+        // Check if there are more activities
+        $hasMore = Activity::count() > ($offset + $limit);
 
         return [
-            'activities' => $allActivities,
+            'activities' => $activities,
             'grouped_activities' => $groupedActivities,
-            'period' => [
-                'start_date' => jdate($periodStart)->format('Y/m/d'),
-                'end_date' => jdate($periodEnd)->format('Y/m/d'),
-                'months' => $months,
-                'offset' => $offset
-            ],
-            'limits' => $limits
+            'pagination' => [
+                'limit' => $limit,
+                'offset' => $offset,
+                'next_offset' => $offset + $limit,
+                'has_more' => $hasMore,
+                'total' => Activity::count()
+            ]
         ];
     }
 
     /**
-     * Get selective activities for a specific period with performance optimization
+     * Transform activity log entry to frontend-compatible format
      *
-     * Fetches most recent published questions, answers and comments within the date range.
-     * All resources are filtered to only include published items and sorted by created_at descending.
-     *
-     * @param Carbon $startDate
-     * @param Carbon $endDate
-     * @param array $limits
-     * @return \Illuminate\Support\Collection
+     * @param Activity $log
+     * @return array|null
      */
-    private function getSelectiveActivitiesForPeriod($startDate, $endDate, array $limits): \Illuminate\Support\Collection
+    private function transformLogToActivity(Activity $log): ?array
     {
-        $activities = collect();
-
-        // Get most recent published questions for the period
-        if ($limits['questions'] > 0) {
-            $questions = Question::select(['id', 'title', 'slug', 'user_id', 'category_id', 'created_at', 'published_at'])
-                ->with(['user:id,name,image', 'category:id,name'])
-                ->published() // Only published questions
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->orderByDesc('created_at') // Sort by created_at descending
-                ->limit($limits['questions'])
-                ->get()
-                ->map(function ($question) {
-                    $userName = $question->user->name ?? 'کاربر ناشناس';
-                    return [
-                        'id' => 'question_' . $question->id,
-                        'type' => 'question',
-                        'user_name' => $userName,
-                        'user_id' => $question->user->id ?? null,
-                        'user_image' => $question->user->image_url ?? null,
-                        'title' => $question->title,
-                        'slug' => $question->slug,
-                        'question_id' => $question->id,
-                        'category_name' => $question->category->name ?? null,
-                        'description' => "کاربر '{$userName}' سوال جدیدی با عنوان '{$question->title}' پرسید",
-                        'created_at' => $question->created_at,
-                        'url' => "/questions/{$question->slug}",
-                        'month' => $this->getPersianMonth($question->created_at)
-                    ];
-                });
-
-            $activities = $activities->merge($questions);
+        $description = $log->description;
+        $causer = $log->causer;
+        $subject = $log->subject;
+        // Convert properties to array if it's a Collection
+        $properties = $log->properties ?? [];
+        if ($properties instanceof \Illuminate\Support\Collection) {
+            $properties = $properties->toArray();
+        } elseif (!is_array($properties)) {
+            $properties = [];
         }
 
-        // Get most recent published answers for the period
-        if ($limits['answers'] > 0) {
-            $answers = Answer::select(['id', 'question_id', 'user_id', 'is_correct', 'created_at', 'published_at'])
-                ->with(['user:id,name,image', 'question:id,title,slug'])
-                ->published() // Only published answers
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->orderByDesc('created_at') // Sort by created_at descending
-                ->limit($limits['answers'])
-                ->get()
-                ->map(function ($answer) {
-                    $userName = $answer->user->name ?? 'کاربر ناشناس';
-                    return [
-                        'id' => 'answer_' . $answer->id,
-                        'type' => 'answer',
-                        'user_name' => $userName,
-                        'user_id' => $answer->user->id ?? null,
-                        'user_image' => $answer->user->image_url ?? null,
-                        'title' => $answer->question->title,
-                        'question_id' => $answer->question->id,
-                        'description' => "کاربر '{$userName}' به سوال '{$answer->question->title}' پاسخ داد",
-                        'created_at' => $answer->created_at,
-                        'url' => "/questions/{$answer->question->slug}",
-                        'is_correct' => $answer->is_correct,
-                        'month' => $this->getPersianMonth($answer->created_at)
-                    ];
-                });
+        $userName = $causer?->name ?? 'کاربر ناشناس';
+        $userId = $causer?->id ?? null;
+        $userImage = $causer?->image_url ?? null;
 
-            $activities = $activities->merge($answers);
+        $baseActivity = [
+            'id' => 'activity_' . $log->id,
+            'user_name' => $userName,
+            'user_id' => $userId,
+            'user_image' => $userImage,
+            'created_at' => $log->created_at->toIso8601String(),
+            'month' => $this->getPersianMonth($log->created_at),
+        ];
+
+        // Map description to activity type and generate appropriate data
+        return match ($description) {
+            'created_question' => $this->transformQuestionCreated($log, $baseActivity, $subject, $properties),
+            'created_answer' => $this->transformAnswerCreated($log, $baseActivity, $subject, $properties),
+            'created_comment' => $this->transformCommentCreated($log, $baseActivity, $subject, $properties),
+            'voted' => $this->transformVote($log, $baseActivity, $subject, $properties),
+            'published_question', 'published_answer', 'published_comment' => $this->transformPublishing($log, $baseActivity, $subject, $properties, $description),
+            'featured_question' => $this->transformFeaturing($log, $baseActivity, $subject, $properties, true),
+            'unfeatured_question' => $this->transformFeaturing($log, $baseActivity, $subject, $properties, false),
+            'marked_correct' => $this->transformMarkedCorrect($log, $baseActivity, $subject, $properties),
+            default => null,
+        };
+    }
+
+    /**
+     * Transform question created activity
+     */
+    private function transformQuestionCreated(Activity $log, array $base, $subject, array $properties): ?array
+    {
+        // Use properties if subject is deleted
+        $title = $properties['title'] ?? $subject?->title ?? 'سوال حذف شده';
+        $slug = $properties['slug'] ?? $subject?->slug ?? null;
+        $questionId = $subject?->id ?? null;
+
+        // Try to get category name from subject if available
+        $categoryName = null;
+        if ($subject instanceof Question && $subject->relationLoaded('category')) {
+            $categoryName = $subject->category?->name;
         }
 
-        // Get most recent published comments for the period
-        if ($limits['comments'] > 0) {
-            $comments = Comment::query()
-                ->select([
-                    'comments.id',
-                    'comments.commentable_type',
-                    'comments.commentable_id',
-                    'comments.created_at',
-                    'comments.published_at',
-                    'users.name',
-                    'users.id as user_id',
-                    'users.image'
-                ])
-                ->join('users', 'comments.user_id', '=', 'users.id')
-                ->published() // Only published comments
-                ->whereBetween('comments.created_at', [$startDate, $endDate])
-                ->orderByDesc('comments.created_at') // Sort by created_at descending
-                ->limit($limits['comments'] * 2) // Get more to account for filtering
-                ->get()
-                ->map(function ($comment) {
-                    $title = '';
-                    $questionSlug = null;
+        return array_merge($base, [
+            'type' => 'question',
+            'title' => $title,
+            'slug' => $slug,
+            'question_id' => $questionId,
+            'category_name' => $categoryName,
+            'description' => "کاربر '{$base['user_name']}' سوال جدیدی با عنوان '{$title}' پرسید",
+            'url' => $slug ? "/questions/{$slug}" : null,
+        ]);
+    }
 
-                    if ($comment->commentable_type === 'App\Models\Question') {
-                        $question = Question::select(['id', 'title', 'slug'])->find($comment->commentable_id);
-                        $title = $question ? $question->title : 'سوال حذف شده';
-                        $questionSlug = $question ? $question->slug : null;
-                    } elseif ($comment->commentable_type === 'App\Models\Answer') {
-                        $answer = Answer::select(['id'])->with('question:id,title,slug')->find($comment->commentable_id);
-                        if ($answer && $answer->question) {
-                            $title = $answer->question->title;
-                            $questionSlug = $answer->question->slug;
-                        } else {
-                            $title = 'پاسخ حذف شده';
-                            $questionSlug = null;
-                        }
-                    }
+    /**
+     * Transform answer created activity
+     */
+    private function transformAnswerCreated(Activity $log, array $base, $subject, array $properties): ?array
+    {
+        // Use properties if subject is deleted
+        $questionTitle = $properties['question_title'] ?? $subject?->question?->title ?? 'سوال حذف شده';
+        $questionSlug = $properties['question_slug'] ?? $subject?->question?->slug ?? null;
+        $questionId = $properties['question_id'] ?? $subject?->question_id ?? null;
 
-                    $userName = $comment->name ?? 'کاربر ناشناس';
-                    $displayTitle = $title ?: 'محتوای حذف شده';
+        return array_merge($base, [
+            'type' => 'answer',
+            'title' => $questionTitle,
+            'question_id' => $questionId,
+            'description' => "کاربر '{$base['user_name']}' به سوال '{$questionTitle}' پاسخ داد",
+            'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
+        ]);
+    }
 
-                    return [
-                        'id' => 'comment_' . $comment->id,
-                        'type' => 'comment',
-                        'user_name' => $userName,
-                        'user_id' => $comment->user_id,
-                        'user_image' => $comment->image ? asset('storage/' . $comment->image) : null,
-                        'title' => $title,
-                        'question_slug' => $questionSlug,
-                        'description' => "کاربر '{$userName}' نظری در '{$displayTitle}' ثبت کرد",
-                        'created_at' => $comment->created_at,
-                        'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
-                        'month' => $this->getPersianMonth($comment->created_at)
-                    ];
-                })
-                ->filter(function ($comment) {
-                    // Only include comments that have valid URLs (not deleted content)
-                    return $comment['url'] !== null;
-                })
-                ->take($limits['comments']); // Limit to the desired number after filtering
-
-            $activities = $activities->merge($comments);
+    /**
+     * Transform comment created activity
+     */
+    private function transformCommentCreated(Activity $log, array $base, $subject, array $properties): ?array
+    {
+        if (!$subject instanceof Comment) {
+            return null;
         }
 
-        // Return activities sorted by created_at descending (most recent first)
-        return $activities->sortByDesc('created_at')->values();
+        $questionTitle = $properties['question_title'] ?? 'محتوای حذف شده';
+        $questionSlug = $properties['question_slug'] ?? null;
+
+        return array_merge($base, [
+            'type' => 'comment',
+            'title' => $questionTitle,
+            'question_slug' => $questionSlug,
+            'description' => "کاربر '{$base['user_name']}' نظری در '{$questionTitle}' ثبت کرد",
+            'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
+        ]);
+    }
+
+    /**
+     * Transform vote activity
+     */
+    private function transformVote(Activity $log, array $base, $subject, array $properties): ?array
+    {
+        $voteType = $properties['vote_type'] ?? 'up';
+        $questionTitle = $properties['question_title'] ?? 'محتوای حذف شده';
+        $questionSlug = $properties['question_slug'] ?? null;
+
+        // Determine votable type
+        $votableType = $properties['votable_type'] ?? null;
+        if (!$votableType && $subject) {
+            $votableType = get_class($subject);
+        }
+
+        $typeLabel = match ($votableType) {
+            Question::class => 'سوال',
+            Answer::class => 'پاسخ',
+            Comment::class => 'نظر',
+            default => 'محتوا',
+        };
+
+        $voteLabel = $voteType === 'up' ? 'رای مثبت' : 'رای منفی';
+
+        return array_merge($base, [
+            'type' => 'vote',
+            'title' => $questionTitle,
+            'vote_type' => $voteType,
+            'description' => "کاربر '{$base['user_name']}' به {$typeLabel} '{$questionTitle}' {$voteLabel} داد",
+            'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
+        ]);
+    }
+
+    /**
+     * Transform publishing activity
+     */
+    private function transformPublishing(Activity $log, array $base, $subject, array $properties, string $description): ?array
+    {
+        $questionTitle = $properties['question_title'] ?? 'محتوای حذف شده';
+        $questionSlug = $properties['question_slug'] ?? null;
+
+        $typeLabel = match ($description) {
+            'published_question' => 'سوال',
+            'published_answer' => 'پاسخ',
+            'published_comment' => 'نظر',
+            default => 'محتوا',
+        };
+
+        return array_merge($base, [
+            'type' => 'publish',
+            'title' => $questionTitle,
+            'description' => "کاربر '{$base['user_name']}' {$typeLabel} '{$questionTitle}' را منتشر کرد",
+            'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
+        ]);
+    }
+
+    /**
+     * Transform featuring activity
+     */
+    private function transformFeaturing(Activity $log, array $base, $subject, array $properties, bool $isFeatured): ?array
+    {
+        // Use properties if subject is deleted
+        $title = $properties['title'] ?? $subject?->title ?? 'سوال حذف شده';
+        $slug = $properties['slug'] ?? $subject?->slug ?? null;
+        $action = $isFeatured ? 'ویژه کرد' : 'ویژگی را از';
+
+        return array_merge($base, [
+            'type' => 'feature',
+            'title' => $title,
+            'is_featured' => $isFeatured,
+            'description' => "کاربر '{$base['user_name']}' سوال '{$title}' را {$action}",
+            'url' => $slug ? "/questions/{$slug}" : null,
+        ]);
+    }
+
+    /**
+     * Transform marked correct activity
+     */
+    private function transformMarkedCorrect(Activity $log, array $base, $subject, array $properties): ?array
+    {
+        // Use properties if subject is deleted
+        $questionTitle = $properties['question_title'] ?? $subject?->question?->title ?? 'سوال حذف شده';
+        $questionSlug = $properties['question_slug'] ?? $subject?->question?->slug ?? null;
+        $isCorrect = $properties['is_correct'] ?? $subject?->is_correct ?? false;
+
+        return array_merge($base, [
+            'type' => 'answer',
+            'title' => $questionTitle,
+            'is_correct' => $isCorrect,
+            'description' => "کاربر '{$base['user_name']}' پاسخ به سوال '{$questionTitle}' را " . ($isCorrect ? 'صحیح' : 'عادی') . ' علامت زد',
+            'url' => $questionSlug ? "/questions/{$questionSlug}" : null,
+        ]);
     }
 
     /**
      * Get Persian month name with year from date
      *
-     * @param string $date
+     * @param Carbon $date
      * @return string
      */
     private function getPersianMonth($date): string
     {
-        $carbon = Carbon::parse($date);
-
+        $carbon = $date instanceof Carbon ? $date : Carbon::parse($date);
         return jdate($carbon)->format('F Y');
     }
 
     /**
-     * Check if there are more published activities available beyond the given offset
-     *
-     * Checks for published questions, answers, or comments with created_at before the offset date.
+     * Check if there are more activities available beyond the given offset
      *
      * @param int $offset
      * @return bool
      */
     public function hasMoreActivities(int $offset): bool
     {
-        // Check if there are any published activities older than the current offset
-        $checkDate = Carbon::now()->subMonths($offset)->startOfMonth();
-
-        // Check for any published activities (questions, answers, or comments) before this date
-        $hasQuestions = Question::published()
-            ->where('created_at', '<', $checkDate)
-            ->exists();
-
-        $hasAnswers = Answer::published()
-            ->where('created_at', '<', $checkDate)
-            ->exists();
-
-        $hasComments = Comment::published()
-            ->where('created_at', '<', $checkDate)
-            ->exists();
-
-        return $hasQuestions || $hasAnswers || $hasComments;
+        return Activity::count() > $offset;
     }
 
     /**
      * Get activity statistics for a period
      *
-     * Returns counts of published questions, answers and comments within the time period.
+     * Returns counts of activities by type within the time period.
      *
      * @param int $months
      * @param int $offset
@@ -294,13 +311,16 @@ class ActivityService
         $startDate = $endDate->copy()->subMonths($months);
 
         $stats = [
-            'total_questions' => Question::published()
+            'total_questions' => Activity::where('description', 'created_question')
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->count(),
-            'total_answers' => Answer::published()
+            'total_answers' => Activity::where('description', 'created_answer')
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->count(),
-            'total_comments' => Comment::published()
+            'total_comments' => Activity::where('description', 'created_comment')
+                ->whereBetween('created_at', [$startDate, $endDate])
+                ->count(),
+            'total_votes' => Activity::where('description', 'voted')
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->count(),
             'period' => [

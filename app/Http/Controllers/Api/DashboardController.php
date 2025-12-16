@@ -225,16 +225,11 @@ class DashboardController extends Controller
     }
 
     /**
-     * Get activity feed showing activities for a specific period
-     * Loads 3 months by default, with load more functionality
+     * Get activity feed showing activities with chronological pagination
      *
      * Query Parameters:
-     * - load_more (boolean): Set to true to load 3 more months from current offset
-     * - offset (int): Number of months to offset from current date (auto-calculated for load_more)
-     * - months (int): Number of months to load (default: 3, ignored when load_more=true)
-     * - questions_limit (int): Max questions per month (default: 10)
-     * - answers_limit (int): Max answers per month (default: 8)
-     * - comments_limit (int): Max comments per month (default: 5)
+     * - limit (int): Number of activities to return (default: 30)
+     * - offset (int): Number of activities to skip (default: 0)
      *
      * @param Request $request
      * @return JsonResponse
@@ -242,48 +237,17 @@ class DashboardController extends Controller
     public function activity(Request $request): JsonResponse
     {
         try {
-            // Default to 3 months, but allow custom months for load more
-            $months = (int) $request->get('months', 3);
+            $limit = (int) $request->get('limit', 30);
             $offset = (int) $request->get('offset', 0);
-            $loadMore = filter_var($request->get('load_more', false), FILTER_VALIDATE_BOOLEAN);
-
-            if ($loadMore) {
-                $months = 3;
-                $offset = max(0, $offset);
-            } else {
-                $offset = 0;
-                $months = max(1, $months);
-            }
-
-            // Custom limits for activity types per month
-            $limits = [
-                'questions' => $request->get('questions_limit', 10),
-                'answers' => $request->get('answers_limit', 8),
-                'comments' => $request->get('comments_limit', 5)
-            ];
 
             $activityService = new ActivityService();
-            $report = $activityService->generateActivityReport($months, $offset, $limits);
-
-            $activities = $report['activities'];
-            $groupedActivities = $report['grouped_activities'];
-
-            // Calculate next offset for load more functionality
-            $nextOffset = $offset + $months;
-            $hasMore = $activityService->hasMoreActivities($nextOffset);
+            $result = $activityService->getActivities($limit, $offset);
 
             return response()->json([
                 'success' => true,
-                'data' => $activities,
-                'grouped_data' => $groupedActivities,
-                'period' => $report['period'],
-                'limits' => $report['limits'],
-                'pagination' => [
-                    'current_offset' => $offset,
-                    'next_offset' => $nextOffset,
-                    'has_more' => $hasMore,
-                    'months_loaded' => $months
-                ],
+                'data' => $result['activities'],
+                'grouped_data' => $result['grouped_activities'],
+                'pagination' => $result['pagination'],
                 'message' => 'فعالیت‌ها با موفقیت دریافت شد'
             ]);
         } catch (\Exception $e) {
