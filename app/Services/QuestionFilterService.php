@@ -5,7 +5,7 @@ namespace App\Services;
 use App\Models\Question;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class QuestionFilterService
 {
@@ -21,33 +21,50 @@ class QuestionFilterService
 
         $user = $request->user();
 
-        // Select only necessary columns from questions table
+        // Start with explicit select to avoid column conflicts from JOINs
         $query->select('questions.*');
 
-        // Optimize eager loading with specific columns
-        $query->with([
-            'user:id,name,email,level,image',
-            'category:id,name,slug',
-            'tags:id,name,slug'
+        // Add is_solved as a subquery to avoid N+1
+        $query->addSelect([
+            'is_solved' => DB::table('answers')
+                ->selectRaw('CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END')
+                ->whereColumn('answers.question_id', 'questions.id')
+                ->where('answers.is_correct', true)
+                ->limit(1)
         ]);
 
-        // Use subquery counts for better performance (avoids separate queries)
-        $query->withCount([
-            'votes',
-            'answers',
-            'comments',
-            'answers as unpublished_answers_count' => function ($query) {
-                $query->where('published', false);
-            },
-            'comments as unpublished_comments_count' => function ($query) {
-                $query->where('published', false);
-            }
-        ]);
+        // Add user_vote as a subquery to avoid N+1 (only if user is authenticated)
+        if ($user) {
+            $query->addSelect([
+                'user_vote' => DB::table('votes')
+                    ->select('type')
+                    ->whereColumn('votes.votable_id', 'questions.id')
+                    ->where('votes.votable_type', Question::class)
+                    ->where('votes.user_id', $user->id)
+                    ->limit(1)
+            ]);
+        } else {
+            $query->addSelect([DB::raw('NULL as user_vote')]);
+        }
 
-        // Apply visibility filter first to reduce dataset
-        $query->visible($user);
+        // Apply base query with relations and counts
+        $query->with(['user', 'category', 'tags'])
+            ->withCount([
+                'votes',
+                'answers',
+                'comments',
+                'answers as unpublished_answers_count' => function ($query) {
+                    $query->where('published', false);
+                },
+                'comments as unpublished_comments_count' => function ($query) {
+                    $query->where('published', false);
+                }
+            ])
+            ->visible($user)
+            ->withUserPinStatus($user)
+            ->withUserFeatureStatus($user);
 
-        // Apply category filter early for better index usage
+        // Apply category filter
         if ($request->filled('category_id')) {
             $query->where('questions.category_id', $request->category_id);
         }
@@ -55,19 +72,11 @@ class QuestionFilterService
         // Apply tags filter (OR logic - questions must have ANY of the selected tags)
         if ($request->filled('tags')) {
             $tags = explode(',', $request->tags);
-            // Use whereIn with subquery for better performance
-            $query->whereIn('questions.id', function ($subQuery) use ($tags) {
-                $subQuery->select('question_id')
-                    ->from('question_tag')
-                    ->whereIn('tag_id', $tags);
+            $query->whereHas('tags', function ($q) use ($tags) {
+                $q->whereIn('tags.id', $tags);
             });
         }
 
-        // Apply user-specific status joins
-        $query->withUserPinStatus($user)
-              ->withUserFeatureStatus($user);
-
-        // Apply sorting
         if ($this->hasActiveFilters($request)) {
             $this->applySortingFilters($request, $query, $user);
         } else {
@@ -171,47 +180,6 @@ class QuestionFilterService
     public function getPaginatedQuestions(Request $request, int $perPage = 10)
     {
         $query = $this->filter($request);
-
-        // Use cursor pagination for better performance on large datasets
-        // But keep regular pagination for compatibility
         return $query->paginate($perPage);
-    }
-
-    /**
-     * Generate a cache key based on request parameters
-     *
-     * @param Request $request
-     * @param int $perPage
-     * @return string
-     */
-    private function getCacheKey(Request $request, int $perPage): string
-    {
-        $userId = $request->user()?->id ?? 'guest';
-        $page = $request->get('page', 1);
-
-        $params = [
-            'user' => $userId,
-            'page' => $page,
-            'per_page' => $perPage,
-            'category_id' => $request->get('category_id'),
-            'tags' => $request->get('tags'),
-            'filter' => $request->get('filter'),
-            'sort' => $request->get('sort'),
-            'order' => $request->get('order'),
-        ];
-
-        return 'questions:list:' . md5(json_encode($params));
-    }
-
-    /**
-     * Clear questions list cache
-     * Call this when questions are created, updated, or deleted
-     *
-     * @return void
-     */
-    public function clearCache(): void
-    {
-        // Clear all questions list cache
-        Cache::tags(['questions'])->flush();
     }
 }

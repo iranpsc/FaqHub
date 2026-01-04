@@ -236,6 +236,7 @@ class Question extends Model
 
     /**
      * Scope a query to get questions with user's pin status.
+     * Uses subqueries instead of JOINs for better performance.
      *
      * @param \Illuminate\Database\Eloquent\Builder $query
      * @param \App\Models\User|null $user
@@ -250,13 +251,17 @@ class Question extends Model
             ]);
         }
 
-        // Use optimized left join with proper indexing
-        return $query->leftJoin('user_pinned_questions', function ($join) use ($user) {
-            $join->on('questions.id', '=', 'user_pinned_questions.question_id')
-                ->where('user_pinned_questions.user_id', '=', $user->id);
-        })->addSelect([
-            DB::raw('IF(user_pinned_questions.question_id IS NOT NULL, 1, 0) as is_pinned_by_user'),
-            'user_pinned_questions.pinned_at as pinned_at'
+        return $query->addSelect([
+            'is_pinned_by_user' => DB::table('user_pinned_questions')
+                ->selectRaw('CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END')
+                ->whereColumn('user_pinned_questions.question_id', 'questions.id')
+                ->where('user_pinned_questions.user_id', $user->id)
+                ->limit(1),
+            'pinned_at' => DB::table('user_pinned_questions')
+                ->select('pinned_at')
+                ->whereColumn('user_pinned_questions.question_id', 'questions.id')
+                ->where('user_pinned_questions.user_id', $user->id)
+                ->limit(1)
         ]);
     }
 
@@ -270,17 +275,17 @@ class Question extends Model
     public function scopeOrderByPinStatus($query, ?User $user)
     {
         if (!$user) {
-            return $query->orderBy('questions.created_at', 'desc');
+            return $query->latest('questions.created_at');
         }
 
-        // Optimized ordering using indexed columns
-        return $query->orderBy('is_pinned_by_user', 'desc')
-            ->orderBy('user_pinned_questions.pinned_at', 'desc')
+        return $query->orderByRaw('is_pinned_by_user DESC')
+            ->orderByRaw('COALESCE(pinned_at, \'1970-01-01\') DESC')
             ->orderBy('questions.created_at', 'desc');
     }
 
     /**
      * Scope a query to get questions with user's feature status.
+     * Uses subqueries instead of JOINs for better performance.
      *
      * @param \Illuminate\Database\Eloquent\Builder $query
      * @param \App\Models\User|null $user
@@ -295,14 +300,17 @@ class Question extends Model
             ]);
         }
 
-        // Use optimized left join with proper indexing
-        return $query->leftJoin('user_featured_questions', function ($join) use ($user) {
-            $join->on('questions.id', '=', 'user_featured_questions.question_id')
-                ->where('user_featured_questions.user_id', '=', $user->id)
-                ->where('user_featured_questions.type', '=', 'featured');
-        })->addSelect([
-            DB::raw('IF(user_featured_questions.question_id IS NOT NULL, 1, 0) as is_featured_by_user'),
-            'user_featured_questions.featured_at as featured_at'
+        return $query->addSelect([
+            'is_featured_by_user' => DB::table('user_featured_questions')
+                ->selectRaw('CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END')
+                ->whereColumn('user_featured_questions.question_id', 'questions.id')
+                ->where('user_featured_questions.user_id', $user->id)
+                ->limit(1),
+            'featured_at' => DB::table('user_featured_questions')
+                ->select('featured_at')
+                ->whereColumn('user_featured_questions.question_id', 'questions.id')
+                ->where('user_featured_questions.user_id', $user->id)
+                ->limit(1)
         ]);
     }
 

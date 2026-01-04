@@ -14,18 +14,11 @@ class QuestionResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        // Optimize user vote check - avoid N+1 query
-        $userVote = null;
-        if ($request->user() && $this->relationLoaded('votes')) {
-            $userVoteRecord = $this->votes->firstWhere('user_id', $request->user()->id);
-            $userVote = $userVoteRecord ? $userVoteRecord->type : null;
-        }
+        // Use preloaded user_vote if available, otherwise fall back to query
+        $userVote = $this->getUserVote($request);
 
-        // Cache is_solved calculation to avoid repeated queries
-        $isSolved = $this->resource->is_solved ?? null;
-        if ($isSolved === null && $this->relationLoaded('answers')) {
-            $isSolved = $this->answers->contains('is_correct', true);
-        }
+        // Use preloaded is_solved if available, otherwise fall back to method
+        $isSolved = $this->getIsSolved();
 
         return [
             'id' => $this->id,
@@ -55,7 +48,7 @@ class QuestionResource extends JsonResource
                 'user_vote' => $userVote,
             ],
             'views' => $this->views,
-            'is_solved' => $isSolved ?? false,
+            'is_solved' => $isSolved,
             'is_pinned_by_user' => (bool) ($this->is_pinned_by_user ?? false),
             'pinned_at' => $this->pinned_at ? $this->pinned_at : null,
             'is_featured_by_user' => (bool) ($this->is_featured_by_user ?? false),
@@ -71,5 +64,38 @@ class QuestionResource extends JsonResource
                 'delete' => $request->user()?->can('delete', $this->resource) ?? false,
             ]
         ];
+    }
+
+    /**
+     * Get user vote - use preloaded value if available, otherwise query
+     */
+    private function getUserVote(Request $request): ?string
+    {
+        // Check if user_vote was preloaded via subquery
+        if (isset($this->resource->user_vote)) {
+            return $this->resource->user_vote;
+        }
+
+        // Fall back to query for non-optimized calls (e.g., show method)
+        if ($request->user()) {
+            $userVoteRecord = $this->votes()->where('user_id', $request->user()->id)->first();
+            return $userVoteRecord ? $userVoteRecord->type : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get is_solved - use preloaded value if available, otherwise call method
+     */
+    private function getIsSolved(): bool
+    {
+        // Check if is_solved was preloaded via subquery
+        if (isset($this->resource->is_solved)) {
+            return (bool) $this->resource->is_solved;
+        }
+
+        // Fall back to method for non-optimized calls (e.g., show method)
+        return $this->isSolved();
     }
 }

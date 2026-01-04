@@ -2,8 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\Question;
-use App\Observers\QuestionObserver;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -21,7 +19,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Register Question observer for cache invalidation
-        Question::observe(QuestionObserver::class);
+        //
     }
 }
