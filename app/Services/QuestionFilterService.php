@@ -26,7 +26,7 @@ class QuestionFilterService
 
         // Optimize eager loading with specific columns
         $query->with([
-            'user:id,name,email,level,avatar',
+            'user:id,name,email,level,image',
             'category:id,name,slug',
             'tags:id,name,slug'
         ]);
