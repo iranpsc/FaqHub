@@ -21,11 +21,26 @@ class AuthController extends Controller
      */
     public function redirect(Request $request)
     {
-        cache()->put('state', $state = Str::random(40));
+        // Check redirect depth to prevent infinite loops
+        $redirectDepth = cache()->get('redirect_depth_' . $request->ip(), 0);
+        if ($redirectDepth >= 3) {
+            return response()->json([
+                'error' => 'Too many redirect attempts. Please try again later.',
+            ], 429);
+        }
 
-        // Cache the intended URL if provided
+        cache()->put('state', $state = Str::random(40), now()->addMinutes(10));
+
+        // Validate and cache the intended URL if provided
         if ($request->has('intended_url')) {
-            cache()->put('intended_url', $request->input('intended_url'));
+            $intendedUrl = $request->input('intended_url');
+
+            // Validate the intended URL before caching
+            if ($this->validateAndSanitizeUrl($intendedUrl)) {
+                cache()->put('intended_url', $intendedUrl, now()->addMinutes(10));
+                // Increment redirect depth
+                cache()->put('redirect_depth_' . $request->ip(), $redirectDepth + 1, now()->addMinutes(5));
+            }
         }
 
         $query = http_build_query([
@@ -124,12 +139,28 @@ class AuthController extends Controller
         // Get cached intended URL and clean up session
         $intendedUrl = cache()->pull('intended_url');
 
+        // Reset redirect depth on successful authentication
+        cache()->forget('redirect_depth_' . $request->ip());
+
         // Validate and sanitize the intended URL
         // Falls back to frontend app URL from FRONTEND_APP_URL env variable
-        $baseUrl = $this->validateAndSanitizeUrl($intendedUrl) ?: config('services.oauth.app_url');
+        $baseUrl = $this->validateAndSanitizeUrl($intendedUrl, $request);
+
+        // If validation failed or URL is dangerous, use default app URL
+        if (!$baseUrl) {
+            $baseUrl = config('services.oauth.app_url');
+        }
+
+        // Final check: ensure we're not redirecting to the callback route itself
+        $finalUrl = $baseUrl . '#token=' . $token;
+        if ($this->isRedirectLoop($finalUrl, $request)) {
+            // Fallback to safe default URL
+            $baseUrl = config('services.oauth.app_url');
+            $finalUrl = $baseUrl . '#token=' . $token;
+        }
 
         // Use URL fragment to avoid leaking tokens via Referer headers
-        return redirect($baseUrl . '#token=' . $token);
+        return redirect($finalUrl);
     }
 
     /**
@@ -174,12 +205,13 @@ class AuthController extends Controller
     }
 
     /**
-     * Validate and sanitize the intended URL to prevent open redirects.
+     * Validate and sanitize the intended URL to prevent open redirects and infinite loops.
      *
      * @param string|null $url
+     * @param Request|null $request
      * @return string|null
      */
-    protected function validateAndSanitizeUrl($url)
+    protected function validateAndSanitizeUrl($url, ?Request $request = null)
     {
         if (!$url) {
             return null;
@@ -207,14 +239,89 @@ class AuthController extends Controller
             return null;
         }
 
-        // Reconstruct a clean URL
+        // Extract and validate the path
+        $path = $parsedUrl['path'] ?? '/';
+
+        // Block dangerous paths that could cause redirect loops
+        $dangerousPaths = [
+            '/auth/callback',
+            '/auth/redirect',
+            '/api/auth/callback',
+            '/api/auth/redirect',
+            '/oauth/callback',
+            '/oauth/authorize',
+            '/login',
+            '/logout',
+        ];
+
+        // Normalize path for comparison (remove trailing slashes, lowercase)
+        $normalizedPath = rtrim(strtolower($path), '/');
+
+        foreach ($dangerousPaths as $dangerousPath) {
+            $normalizedDangerous = rtrim(strtolower($dangerousPath), '/');
+            // Check if path starts with or equals dangerous path
+            if ($normalizedPath === $normalizedDangerous ||
+                str_starts_with($normalizedPath, $normalizedDangerous . '/')) {
+                return null;
+            }
+        }
+
+        // Check if redirecting to the same URL as current request (redirect loop)
+        if ($request && $this->isRedirectLoop($url, $request)) {
+            return null;
+        }
+
+        // Reconstruct a clean URL (without fragment, as it will be added separately)
         $scheme = $parsedUrl['scheme'] ?? 'https';
         $host = $parsedUrl['host'];
         $port = isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '';
-        $path = $parsedUrl['path'] ?? '/';
         $query = isset($parsedUrl['query']) ? '?' . $parsedUrl['query'] : '';
 
         return $scheme . '://' . $host . $port . $path . $query;
+    }
+
+    /**
+     * Check if a redirect would cause an infinite loop.
+     *
+     * @param string $redirectUrl
+     * @param Request $request
+     * @return bool
+     */
+    protected function isRedirectLoop(string $redirectUrl, Request $request): bool
+    {
+        // Parse both URLs
+        $redirectParsed = parse_url($redirectUrl);
+        $currentParsed = parse_url($request->fullUrl());
+
+        if ($redirectParsed === false || $currentParsed === false) {
+            return false;
+        }
+
+        // Compare hosts
+        $redirectHost = ($redirectParsed['scheme'] ?? '') . '://' . ($redirectParsed['host'] ?? '');
+        $currentHost = ($currentParsed['scheme'] ?? '') . '://' . ($currentParsed['host'] ?? '');
+
+        if ($redirectHost !== $currentHost) {
+            return false;
+        }
+
+        // Compare paths (normalize)
+        $redirectPath = rtrim($redirectParsed['path'] ?? '/', '/');
+        $currentPath = rtrim($currentParsed['path'] ?? '/', '/');
+
+        // If paths match, it's a potential loop
+        // But allow if it's just the root path
+        if ($redirectPath === $currentPath && $redirectPath !== '/') {
+            return true;
+        }
+
+        // Check if redirecting to callback route
+        if (str_contains($redirectPath, '/auth/callback') ||
+            str_contains($redirectPath, '/api/auth/callback')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
