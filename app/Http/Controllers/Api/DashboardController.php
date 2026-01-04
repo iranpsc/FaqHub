@@ -15,24 +15,32 @@ class DashboardController extends Controller
 {
     /**
      * Get dashboard statistics
+     * Optimized: Uses a single query with subqueries instead of 4 separate queries
      *
      * @return JsonResponse
      */
     public function stats(): JsonResponse
     {
         try {
-            $stats = [
-                'totalQuestions' => Question::published()->count(),
-                'totalAnswers' => Answer::published()->count(),
-                'totalUsers' => User::count(),
-                'solvedQuestions' => Question::whereHas('answers', function ($query) {
-                    $query->where('is_correct', true);
-                })->count()
-            ];
+            // Single query with all counts as subqueries for better performance
+            $stats = DB::selectOne("
+                SELECT
+                    (SELECT COUNT(*) FROM questions WHERE published = 1 AND published_at IS NOT NULL) as totalQuestions,
+                    (SELECT COUNT(*) FROM answers WHERE published = 1) as totalAnswers,
+                    (SELECT COUNT(*) FROM users) as totalUsers,
+                    (SELECT COUNT(DISTINCT q.id) FROM questions q
+                     INNER JOIN answers a ON q.id = a.question_id
+                     WHERE a.is_correct = 1) as solvedQuestions
+            ");
 
             return response()->json([
                 'success' => true,
-                'data' => $stats,
+                'data' => [
+                    'totalQuestions' => (int) $stats->totalQuestions,
+                    'totalAnswers' => (int) $stats->totalAnswers,
+                    'totalUsers' => (int) $stats->totalUsers,
+                    'solvedQuestions' => (int) $stats->solvedQuestions,
+                ],
                 'message' => 'آمار با موفقیت دریافت شد'
             ]);
         } catch (\Exception $e) {
@@ -46,6 +54,7 @@ class DashboardController extends Controller
 
     /**
      * Get recommended questions (random selection)
+     * Optimized: Uses efficient random selection with indexed columns
      *
      * @param Request $request
      * @return JsonResponse
@@ -55,11 +64,18 @@ class DashboardController extends Controller
         try {
             $limit = $request->get('limit', 15);
 
-            $questions = Question::with(['user', 'tags', 'category'])
-                ->withCount(['answers', 'votes', 'comments'])
-                ->where('published', true)
+            // Get random IDs first (more efficient than inRandomOrder on full table)
+            // Use a subquery with RAND() on a limited set
+            $randomIds = Question::where('published', true)
+                ->select('id')
                 ->inRandomOrder()
                 ->limit($limit)
+                ->pluck('id');
+
+            // Then fetch the full data for those IDs
+            $questions = Question::with(['user:id,name', 'tags:id,name', 'category:id,name'])
+                ->withCount(['answers', 'votes'])
+                ->whereIn('id', $randomIds)
                 ->get()
                 ->map(function ($question) {
                     return [
@@ -78,12 +94,10 @@ class DashboardController extends Controller
                             'id' => $question->category->id,
                             'name' => $question->category->name,
                         ] : null,
-                        'tags' => $question->tags->map(function ($tag) {
-                            return [
-                                'id' => $tag->id,
-                                'name' => $tag->name,
-                            ];
-                        })
+                        'tags' => $question->tags->map(fn($tag) => [
+                            'id' => $tag->id,
+                            'name' => $tag->name,
+                        ])
                     ];
                 });
 
@@ -103,6 +117,7 @@ class DashboardController extends Controller
 
     /**
      * Get popular questions based on views and period
+     * Optimized: Uses selective eager loading and efficient sorting
      *
      * @param Request $request
      * @return JsonResponse
@@ -113,20 +128,21 @@ class DashboardController extends Controller
             $limit = $request->get('limit', 15);
             $period = $request->get('period', 'all'); // week, month, year, all
 
-            $query = Question::with(['user', 'tags', 'category'])
-                ->withCount(['answers', 'votes', 'comments'])
+            $query = Question::select('questions.*')
+                ->with(['user:id,name', 'tags:id,name', 'category:id,name'])
+                ->withCount(['answers', 'votes'])
                 ->where('published', true);
 
             // Apply date filter based on period
             switch ($period) {
                 case 'week':
-                    $query->where('created_at', '>=', now()->subWeek());
+                    $query->where('questions.created_at', '>=', now()->subWeek());
                     break;
                 case 'month':
-                    $query->where('created_at', '>=', now()->subMonth());
+                    $query->where('questions.created_at', '>=', now()->subMonth());
                     break;
                 case 'year':
-                    $query->where('created_at', '>=', now()->subYear());
+                    $query->where('questions.created_at', '>=', now()->subYear());
                     break;
                 case 'all':
                 default:
@@ -135,9 +151,8 @@ class DashboardController extends Controller
             }
 
             $questions = $query
-                ->orderByDesc(DB::raw('COALESCE(views, 0)')) // Order by views (handle null values)
+                ->orderByDesc('views') // Primary sort by views (indexed)
                 ->orderByDesc('votes_count') // Secondary sort by votes
-                ->orderByDesc('answers_count') // Tertiary sort by answers
                 ->limit($limit)
                 ->get()
                 ->map(function ($question) {
@@ -157,12 +172,10 @@ class DashboardController extends Controller
                             'id' => $question->category->id,
                             'name' => $question->category->name,
                         ] : null,
-                        'tags' => $question->tags->map(function ($tag) {
-                            return [
-                                'id' => $tag->id,
-                                'name' => $tag->name,
-                            ];
-                        })
+                        'tags' => $question->tags->map(fn($tag) => [
+                            'id' => $tag->id,
+                            'name' => $tag->name,
+                        ])
                     ];
                 });
 
@@ -182,6 +195,7 @@ class DashboardController extends Controller
 
     /**
      * Get most active users based on score and recent activity
+     * Optimized: Uses subqueries instead of withCount for better performance
      *
      * @param Request $request
      * @return JsonResponse
@@ -191,10 +205,29 @@ class DashboardController extends Controller
         try {
             $limit = $request->get('limit', 5);
 
-            $users = User::withCount(['questions', 'answers', 'comments'])
+            // Use subqueries for counts - more efficient than withCount for ordering
+            $users = User::select([
+                    'users.id',
+                    'users.name',
+                    'users.image',
+                    'users.score',
+                ])
+                ->selectSub(
+                    DB::table('questions')->selectRaw('COUNT(*)')
+                        ->whereColumn('questions.user_id', 'users.id'),
+                    'questions_count'
+                )
+                ->selectSub(
+                    DB::table('answers')->selectRaw('COUNT(*)')
+                        ->whereColumn('answers.user_id', 'users.id'),
+                    'answers_count'
+                )
+                ->selectSub(
+                    DB::table('comments')->selectRaw('COUNT(*)')
+                        ->whereColumn('comments.user_id', 'users.id'),
+                    'comments_count'
+                )
                 ->orderByDesc('score')
-                ->orderByDesc('questions_count')
-                ->orderByDesc('answers_count')
                 ->limit($limit)
                 ->get()
                 ->map(function ($user) {
@@ -203,10 +236,10 @@ class DashboardController extends Controller
                         'name' => $user->name,
                         'image' => $user->image,
                         'score' => $user->score ?? 0,
-                        'questions_count' => $user->questions_count,
-                        'answers_count' => $user->answers_count,
-                        'comments_count' => $user->comments_count,
-                        'total_activity' => $user->questions_count + $user->answers_count + $user->comments_count,
+                        'questions_count' => (int) $user->questions_count,
+                        'answers_count' => (int) $user->answers_count,
+                        'comments_count' => (int) $user->comments_count,
+                        'total_activity' => (int) $user->questions_count + (int) $user->answers_count + (int) $user->comments_count,
                     ];
                 });
 

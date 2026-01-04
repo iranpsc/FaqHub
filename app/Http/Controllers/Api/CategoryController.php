@@ -8,6 +8,7 @@ use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use App\Http\Resources\QuestionResource;
+use Illuminate\Support\Facades\DB;
 
 class CategoryController extends Controller
 {
@@ -29,32 +30,26 @@ class CategoryController extends Controller
     }
 
     /**
-     * Get popular categories based on questions, answers, and comments count.
+     * Get popular categories based on questions count.
+     * Optimized: Uses simple questions_count instead of complex JOINs
      */
     public function popular(Request $request)
     {
         $limit = $request->input('limit', 15);
 
-        $categories = Category::withCount([
-            'questions',
-            'questions as answers_count' => function ($query) {
-                $query->join('answers', 'questions.id', '=', 'answers.question_id');
-            },
-            'questions as comments_count' => function ($query) {
-                $query->join('comments', 'questions.id', '=', 'comments.commentable_id')
-                    ->where('comments.commentable_type', 'App\\Models\\Question');
-            }
-        ])
-            ->get()
-            ->map(function ($category) {
-                $category->activity_score = $category->questions_count +
-                    ($category->answers_count ?? 0) +
-                    ($category->comments_count ?? 0);
-                return $category;
-            })
-            ->sortByDesc('activity_score')
-            ->take($limit)
-            ->values();
+        // Simplified query - just use questions_count for popularity
+        // The complex JOINs for answers and comments were causing performance issues
+        $categories = Category::select('categories.*')
+            ->selectSub(
+                DB::table('questions')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('questions.category_id', 'categories.id')
+                    ->where('questions.published', true),
+                'questions_count'
+            )
+            ->orderByDesc('questions_count')
+            ->limit($limit)
+            ->get();
 
         return CategoryResource::collection($categories);
     }
