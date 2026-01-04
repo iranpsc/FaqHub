@@ -245,16 +245,17 @@ class Question extends Model
     {
         if (!$user) {
             return $query->addSelect([
-                DB::raw('false as is_pinned_by_user'),
-                DB::raw('null as pinned_at')
+                DB::raw('0 as is_pinned_by_user'),
+                DB::raw('NULL as pinned_at')
             ]);
         }
 
+        // Use optimized left join with proper indexing
         return $query->leftJoin('user_pinned_questions', function ($join) use ($user) {
             $join->on('questions.id', '=', 'user_pinned_questions.question_id')
                 ->where('user_pinned_questions.user_id', '=', $user->id);
         })->addSelect([
-            DB::raw('CASE WHEN user_pinned_questions.id IS NOT NULL THEN 1 ELSE 0 END as is_pinned_by_user'),
+            DB::raw('IF(user_pinned_questions.question_id IS NOT NULL, 1, 0) as is_pinned_by_user'),
             'user_pinned_questions.pinned_at as pinned_at'
         ]);
     }
@@ -269,11 +270,12 @@ class Question extends Model
     public function scopeOrderByPinStatus($query, ?User $user)
     {
         if (!$user) {
-            return $query->latest('questions.created_at');
+            return $query->orderBy('questions.created_at', 'desc');
         }
 
-        return $query->orderByRaw('is_pinned_by_user DESC')
-            ->orderByRaw('CASE WHEN is_pinned_by_user = 1 THEN user_pinned_questions.pinned_at END DESC')
+        // Optimized ordering using indexed columns
+        return $query->orderBy('is_pinned_by_user', 'desc')
+            ->orderBy('user_pinned_questions.pinned_at', 'desc')
             ->orderBy('questions.created_at', 'desc');
     }
 
@@ -288,16 +290,18 @@ class Question extends Model
     {
         if (!$user) {
             return $query->addSelect([
-                DB::raw('false as is_featured_by_user'),
-                DB::raw('null as featured_at')
+                DB::raw('0 as is_featured_by_user'),
+                DB::raw('NULL as featured_at')
             ]);
         }
 
+        // Use optimized left join with proper indexing
         return $query->leftJoin('user_featured_questions', function ($join) use ($user) {
             $join->on('questions.id', '=', 'user_featured_questions.question_id')
-                ->where('user_featured_questions.user_id', '=', $user->id);
+                ->where('user_featured_questions.user_id', '=', $user->id)
+                ->where('user_featured_questions.type', '=', 'featured');
         })->addSelect([
-            DB::raw('CASE WHEN user_featured_questions.id IS NOT NULL THEN 1 ELSE 0 END as is_featured_by_user'),
+            DB::raw('IF(user_featured_questions.question_id IS NOT NULL, 1, 0) as is_featured_by_user'),
             'user_featured_questions.featured_at as featured_at'
         ]);
     }

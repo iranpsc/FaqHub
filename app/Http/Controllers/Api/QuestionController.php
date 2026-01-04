@@ -30,7 +30,11 @@ class QuestionController extends Controller
      */
     public function index(Request $request)
     {
-        $questions = $this->questionFilterService->getPaginatedQuestions($request, 10);
+        // Optimize pagination size based on request
+        $perPage = min((int) $request->get('per_page', 10), 50); // Max 50 items per page
+
+        $questions = $this->questionFilterService->getPaginatedQuestions($request, $perPage);
+
         return QuestionResource::collection($questions);
     }
 
