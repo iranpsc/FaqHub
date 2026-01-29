@@ -39,8 +39,13 @@ class QuestionController extends Controller
      */
     public function search(Request $request)
     {
-        $query = $request->get('q', '');
-        $limit = $request->get('limit', 10);
+        $validated = $request->validate([
+            'q' => 'nullable|string|max:150',
+            'limit' => 'nullable|integer|min:1|max:50',
+        ]);
+
+        $query = $validated['q'] ?? '';
+        $limit = $validated['limit'] ?? 10;
 
         $questions = Question::with('user', 'category')
             ->withCount([

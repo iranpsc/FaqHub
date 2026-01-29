@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\Answer;
 use App\Models\Question;
 use App\Models\User;
 use App\Services\ActivityService;
@@ -62,7 +61,10 @@ class DashboardController extends Controller
     public function recommendedQuestions(Request $request): JsonResponse
     {
         try {
-            $limit = $request->get('limit', 15);
+            $validated = $request->validate([
+                'limit' => 'nullable|integer|min:1|max:50',
+            ]);
+            $limit = $validated['limit'] ?? 15;
 
             // Get random IDs first (more efficient than inRandomOrder on full table)
             // Use a subquery with RAND() on a limited set
@@ -125,8 +127,12 @@ class DashboardController extends Controller
     public function popularQuestions(Request $request): JsonResponse
     {
         try {
-            $limit = $request->get('limit', 15);
-            $period = $request->get('period', 'all'); // week, month, year, all
+            $validated = $request->validate([
+                'limit' => 'nullable|integer|min:1|max:50',
+                'period' => 'nullable|in:week,month,year,all',
+            ]);
+            $limit = $validated['limit'] ?? 15;
+            $period = $validated['period'] ?? 'all'; // week, month, year, all
 
             $query = Question::select('questions.*')
                 ->with(['user:id,name', 'tags:id,name', 'category:id,name'])
@@ -203,7 +209,10 @@ class DashboardController extends Controller
     public function activeUsers(Request $request): JsonResponse
     {
         try {
-            $limit = $request->get('limit', 5);
+            $validated = $request->validate([
+                'limit' => 'nullable|integer|min:1|max:20',
+            ]);
+            $limit = $validated['limit'] ?? 5;
 
             // Use subqueries for counts - more efficient than withCount for ordering
             $users = User::select([
@@ -270,8 +279,12 @@ class DashboardController extends Controller
     public function activity(Request $request): JsonResponse
     {
         try {
-            $limit = (int) $request->get('limit', 30);
-            $offset = (int) $request->get('offset', 0);
+            $validated = $request->validate([
+                'limit' => 'nullable|integer|min:1|max:100',
+                'offset' => 'nullable|integer|min:0|max:5000',
+            ]);
+            $limit = $validated['limit'] ?? 30;
+            $offset = $validated['offset'] ?? 0;
 
             $activityService = new ActivityService();
             $result = $activityService->getActivities($limit, $offset);

@@ -97,6 +97,9 @@ use Illuminate\Support\Facades\Route;
         Route::post('/tinymce-image', [FileUploadController::class, 'uploadTinyMCEImage']);
         Route::post('/quill-image', [FileUploadController::class, 'uploadQuillImage']);
         Route::post('/file', [FileUploadController::class, 'uploadFile']);
+    });
+
+    Route::middleware(['auth:sanctum'])->prefix('upload')->group(function () {
         Route::delete('/file', [FileUploadController::class, 'deleteFile']);
     });
 

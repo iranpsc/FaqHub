@@ -125,7 +125,7 @@ class QuestionFilterService
         // Handle sort and order parameters
         if ($request->filled('sort') && $request->filled('order')) {
             $sortField = $request->sort;
-            $sortOrder = $request->order;
+            $sortOrder = strtolower($request->order) === 'asc' ? 'asc' : 'desc';
 
             switch ($sortField) {
                 case 'created_at':
