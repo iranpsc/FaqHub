@@ -21,15 +21,15 @@ class AuthController extends Controller
      */
     public function redirect(Request $request)
     {
-        // Check redirect depth to prevent infinite loops
-        $redirectDepth = cache()->get('redirect_depth_' . $request->ip(), 0);
+        // Check redirect depth to prevent infinite loops (per session)
+        $redirectDepth = $request->session()->get('redirect_depth', 0);
         if ($redirectDepth >= 3) {
             return response()->json([
                 'error' => 'Too many redirect attempts. Please try again later.',
             ], 429);
         }
 
-        cache()->put('state', $state = Str::random(40), now()->addMinutes(10));
+        $request->session()->put('oauth_state', $state = Str::random(40));
 
         // Validate and cache the intended URL if provided
         if ($request->has('intended_url')) {
@@ -37,9 +37,9 @@ class AuthController extends Controller
 
             // Validate the intended URL before caching
             if ($this->validateAndSanitizeUrl($intendedUrl)) {
-                cache()->put('intended_url', $intendedUrl, now()->addMinutes(10));
+                $request->session()->put('oauth_intended_url', $intendedUrl);
                 // Increment redirect depth
-                cache()->put('redirect_depth_' . $request->ip(), $redirectDepth + 1, now()->addMinutes(5));
+                $request->session()->put('redirect_depth', $redirectDepth + 1);
             }
         }
 
@@ -65,7 +65,7 @@ class AuthController extends Controller
      */
     public function callback(Request $request)
     {
-        $state = cache()->pull('state');
+        $state = $request->session()->pull('oauth_state');
 
         throw_unless(
             strlen($state) > 0 && $state === $request->state,
@@ -99,12 +99,15 @@ class AuthController extends Controller
                 'name' => $userArray['name'],
                 'mobile' => $userArray['mobile'],
                 'code' => $userArray['code'],
-                'access_token' => $accessToken,
-                'refresh_token' => $response->json('refresh_token'),
-                'expires_in' => $response->json('expires_in'),
-                'token_type' => $response->json('token_type'),
             ]
         );
+
+        $user->forceFill([
+            'access_token' => $accessToken,
+            'refresh_token' => $response->json('refresh_token'),
+            'expires_in' => $response->json('expires_in'),
+            'token_type' => $response->json('token_type'),
+        ])->save();
 
         if (empty($user->username)) {
             $user->update([
@@ -137,10 +140,10 @@ class AuthController extends Controller
         $token = $user->createToken('auth-token', ['*'], $tokenExpiry)->plainTextToken;
 
         // Get cached intended URL and clean up session
-        $intendedUrl = cache()->pull('intended_url');
+        $intendedUrl = $request->session()->pull('oauth_intended_url');
 
         // Reset redirect depth on successful authentication
-        cache()->forget('redirect_depth_' . $request->ip());
+        $request->session()->forget('redirect_depth');
 
         // Validate and sanitize the intended URL
         // Falls back to frontend app URL from FRONTEND_APP_URL env variable

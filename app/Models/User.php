@@ -25,14 +25,7 @@ class User extends Authenticatable
         'email_verified_at',
         'mobile',
         'code',
-        'level',
-        'score',
         'image',
-        'access_token',
-        'refresh_token',
-        'expires_in',
-        'token_type',
-        'role',
         'login_notification_enabled'
     ];
 

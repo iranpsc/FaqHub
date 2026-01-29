@@ -51,7 +51,7 @@ class FetchUserLevel implements ShouldQueue
         }
 
         $previousLevel = $this->user->level;
-        $this->user->update(['level' => $level]);
+        $this->user->forceFill(['level' => $level])->save();
 
         if ($level > $previousLevel) {
             $this->user->increment('score', $score);
