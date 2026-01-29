@@ -29,7 +29,7 @@ class AuthController extends Controller
             ], 429);
         }
 
-        $request->session()->put('oauth_state', $state = Str::random(40));
+        cache()->put('oauth_state', $state = Str::random(40));
 
         // Validate and cache the intended URL if provided
         if ($request->has('intended_url')) {
@@ -65,7 +65,7 @@ class AuthController extends Controller
      */
     public function callback(Request $request)
     {
-        $state = $request->session()->pull('oauth_state');
+        $state = cache()->pull('oauth_state');
 
         throw_unless(
             strlen($state) > 0 && $state === $request->state,
