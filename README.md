@@ -1,6 +1,6 @@
-## FAQ Q&A Platform (Laravel)
+## FAQ Q&A Platform (Laravel + Vue 3)
 
-A modern, RTL-friendly Q&A platform where users can ask questions, answer, comment, vote, and curate content. It features role/level-based moderation, OAuth login, and a RESTful API backend powered by Laravel.
+A modern, RTL-friendly Q&A platform where users can ask questions, answer, comment, vote, and curate content. It features role/level-based moderation, OAuth login, and a Vue 3 SPA frontend powered by TailwindCSS and Vite.
 
 ### Key Features
 - **Questions**: create, read, update, delete; tag with multiple tags; belong to a category; auto-slugging; view counters; pagination
@@ -17,13 +17,15 @@ A modern, RTL-friendly Q&A platform where users can ask questions, answer, comme
 
 ### Tech Stack
 - **Backend**: Laravel 12, PHP 8.2, Laravel Sanctum 4.x, Laravel Notifications/Queues, Eloquent ORM
-- **Frontend**: TailwindCSS 3, Vite 6
+- **Frontend**: Vue 3, Vue Router 4, TailwindCSS 3, Vite 6, Axios, NProgress, SweetAlert2, PrimeVue (and related themes), Select2, TinyMCE Vue integration
 - **Database**: Laravel-supported drivers (MySQL, PostgreSQL, SQLite, etc.)
 - **Testing**: PHPUnit 11, Laravel Test utilities, Faker
 - **Utilities**: `sadegh19b/laravel-persian-validation` for Persian validation messages
 
 ### High-level Architecture
+- SPA served from `resources/views/app.blade.php` with `@vite` assets; any web path is handled by a catch-all route and rendered by Vue Router
 - RESTful API under `/api/*` serving JSON resources with dedicated controllers and policies
+- Vue 3 app manages routes, auth state, modals, and global loading with NProgress; Axios adds bearer token automatically
 - Queue workers deliver email notifications asynchronously
 
 ## Getting Started
@@ -170,8 +172,10 @@ curl -H "Authorization: Bearer <SANCTUM_TOKEN>" -H "Accept: application/json" \
 - Legacy params still supported: `newest`, `oldest`, `most_votes`, `most_answers`, `most_views`, `unanswered`, `unsolved`
 
 ## Frontend Overview
-- The application provides a RESTful API that can be consumed by any frontend client
-- Auth flow: clients call `/api/auth/redirect` to initiate OAuth login, then receive a token via callback
+- **SPA routing**: `/` home, `/questions/:slug`, `/authors`, `/authors/:id`, `/categories`, `/categories/:slug`, `/tags`, `/tags/:slug`, `/profile` (requires auth), `/activities`
+- **Auth UX**: when a protected route is hit without a token, the app calls `/api/auth/redirect` and navigates to OAuth
+- **Dark mode**: Tailwind `darkMode: 'class'`, theme toggles via composable
+- **Global services**: Axios instance (`resources/js/services/api.js`), and an in-app `questionService` event bus
 
 ## Notifications & Queues
 - Email notifications are sent to question owners on answers and comments (`App\Notifications\QuestionInteractionNotification`)
@@ -188,7 +192,8 @@ curl -H "Authorization: Bearer <SANCTUM_TOKEN>" -H "Accept: application/json" \
 - `app/Http/Resources/*` – API resources/transformers
 - `app/Models/*` – Eloquent models and query scopes (published/visible, pin/feature status)
 - `app/Services/QuestionFilterService.php` – filtering/sorting logic for questions
-- `routes/api.php` – API routes; `routes/web.php` – web routes
+- `resources/js` – Vue 3 SPA (components, pages, composables, router)
+- `routes/api.php` – API routes; `routes/web.php` – SPA catch-all
 
 ## Environment Variables
 Set at minimum:
