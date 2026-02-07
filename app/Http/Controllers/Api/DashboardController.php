@@ -218,6 +218,7 @@ class DashboardController extends Controller
             $users = User::select([
                     'users.id',
                     'users.name',
+                    'users.username',
                     'users.image',
                     'users.score',
                 ])
@@ -243,6 +244,7 @@ class DashboardController extends Controller
                     return [
                         'id' => $user->id,
                         'name' => $user->name,
+                        'username' => $user->username,
                         'image' => $user->image,
                         'score' => $user->score ?? 0,
                         'questions_count' => (int) $user->questions_count,
