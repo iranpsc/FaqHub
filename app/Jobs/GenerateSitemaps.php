@@ -10,6 +10,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Sitemap\Sitemap;
 use Spatie\Sitemap\SitemapIndex;
 use Spatie\Sitemap\Tags\Url as SitemapUrl;
@@ -55,6 +57,37 @@ class GenerateSitemaps implements ShouldQueue
                 $index->add($baseUrl . '/sitemap/' . ltrim($relativeFile, '/'));
             }
             $index->writeToFile($targetDir . DIRECTORY_SEPARATOR . 'sitemap.xml');
+            $this->generatedFiles[] = 'sitemap.xml';
+        }
+
+        $this->uploadSitemapsToFtp($targetDir);
+    }
+
+    /**
+     * Upload generated sitemap files to the configured FTP disk.
+     */
+    private function uploadSitemapsToFtp(string $targetDir): void
+    {
+        $host = config('filesystems.disks.sitemap_ftp.host');
+        $username = config('filesystems.disks.sitemap_ftp.username');
+
+        if (empty($host) || empty($username)) {
+            return;
+        }
+
+        try {
+            $disk = Storage::disk('sitemap_ftp');
+            foreach ($this->generatedFiles as $relativeFile) {
+                $localPath = $targetDir . DIRECTORY_SEPARATOR . $relativeFile;
+                if (File::exists($localPath)) {
+                    $disk->put($relativeFile, File::get($localPath));
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error('Failed to upload sitemaps to FTP: ' . $e->getMessage(), [
+                'exception' => $e,
+            ]);
+            throw $e;
         }
     }
 
