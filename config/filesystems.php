@@ -62,14 +62,14 @@ return [
 
         'sitemap_ftp' => [
             'driver' => 'ftp',
-            'host' => parse_url(env('FTP_HOST', ''), PHP_URL_HOST) ?: env('FTP_HOST'),
+            'host' => parse_url($ftpHost = env('FTP_HOST', ''), PHP_URL_HOST) ?: $ftpHost,
             'username' => env('FTP_USERNAME'),
             'password' => env('FTP_PASSWORD'),
-            'port' => env('FTP_PORT', 21),
+            'port' => (int) (env('FTP_PORT') ?: parse_url($ftpHost, PHP_URL_PORT) ?: 21),
             'root' => env('FTP_ROOT', ''),
-            'passive' => env('FTP_PASSIVE', true),
-            'ssl' => env('FTP_SSL', false),
-            'timeout' => env('FTP_TIMEOUT', 90),
+            'passive' => filter_var(env('FTP_PASSIVE', true), FILTER_VALIDATE_BOOLEAN),
+            'ssl' => filter_var(env('FTP_SSL', false), FILTER_VALIDATE_BOOLEAN),
+            'timeout' => (int) env('FTP_TIMEOUT', 90),
             'throw' => false,
         ],
 
