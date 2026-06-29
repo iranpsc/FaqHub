@@ -71,15 +71,8 @@ class GenerateSitemaps implements ShouldQueue
      */
     private function uploadSitemapsToFtp(string $targetDir): void
     {
-        $host = config('filesystems.disks.sitemap_ftp.host');
-        $username = config('filesystems.disks.sitemap_ftp.username');
-
-        if (empty($host) || empty($username)) {
-            return;
-        }
-
         try {
-            $disk = Storage::disk('sitemap_ftp');
+            $disk = Storage::disk('ftp');
             foreach ($this->generatedFiles as $relativeFile) {
                 $localPath = $targetDir . DIRECTORY_SEPARATOR . $relativeFile;
                 if (! File::exists($localPath)) {

@@ -41,7 +41,7 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => env('APP_URL').'/storage',
+            'url' => env('APP_URL') . '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,
@@ -60,17 +60,18 @@ return [
             'report' => false,
         ],
 
-        'sitemap_ftp' => [
+        'ftp' => [
             'driver' => 'ftp',
-            'host' => parse_url($ftpHost = env('FTP_HOST', ''), PHP_URL_HOST) ?: $ftpHost,
+            'host' => env('FTP_HOST'),
             'username' => env('FTP_USERNAME'),
             'password' => env('FTP_PASSWORD'),
-            'port' => (int) (env('FTP_PORT') ?: parse_url($ftpHost, PHP_URL_PORT) ?: 21),
-            'root' => env('FTP_ROOT', ''),
-            'passive' => filter_var(env('FTP_PASSIVE', true), FILTER_VALIDATE_BOOLEAN),
-            'ssl' => filter_var(env('FTP_SSL', false), FILTER_VALIDATE_BOOLEAN),
-            'timeout' => (int) env('FTP_TIMEOUT', 90),
-            'throw' => false,
+
+            // Optional FTP Settings...
+            // 'port' => env('FTP_PORT', 21),
+            // 'root' => env('FTP_ROOT'),
+            // 'passive' => true,
+            // 'ssl' => true,
+            // 'timeout' => 30,
         ],
 
     ],
